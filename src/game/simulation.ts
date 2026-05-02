@@ -70,7 +70,7 @@ const PUNCH_RANGE = 120;
 const PUNCH_HOLD_TIME = 0.24;
 const PUNCH_COOLDOWN = 0.56;
 const PUNCH_RETURN_EPSILON = 6;
-const METEOR_BASE_SPEED = 54;
+const METEOR_BASE_SPEED = 34;
 const PUNCH_KNOCK_SPEED = 280;
 const SATELLITE_KNOCK_SPEED = 250;
 const SATELLITE_HIT_LOCKOUT = 1.35;
@@ -241,7 +241,7 @@ export class OrbitPunchSimulation {
       id: nextId++,
       pos: spawn,
       vel: { x: inward.x * speed, y: inward.y * speed },
-      radius: 17 + Math.random() * 7,
+      radius: 25 + Math.random() * 7,
       alive: true,
       knocked: false,
       spin: Math.random() * Math.PI * 2
