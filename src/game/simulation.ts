@@ -15,11 +15,16 @@ export type Meteor = {
 
 export type Punch = {
   id: number;
+  origin: Vec2;
   pos: Vec2;
-  vel: Vec2;
+  direction: Vec2;
   radius: number;
+  distance: number;
+  maxDistance: number;
+  hold: number;
   life: number;
   maxLife: number;
+  phase: "extending" | "holding" | "returning";
 };
 
 export type HitSpark = {
@@ -57,9 +62,12 @@ const ORBIT_RADIUS = 136;
 const OUTER_RADIUS = 500;
 
 const PLAYER_ORBIT_SPEED = 1.95;
-const PUNCH_SPEED = 760;
-const PUNCH_LIFE = 0.42;
-const PUNCH_COOLDOWN = 0.32;
+const PUNCH_EXTEND_SPEED = 480;
+const PUNCH_RETURN_SPEED = 560;
+const PUNCH_RANGE = 120;
+const PUNCH_HOLD_TIME = 0.24;
+const PUNCH_COOLDOWN = 0.56;
+const PUNCH_RETURN_EPSILON = 6;
 const METEOR_BASE_SPEED = 54;
 const SPAWN_BASE_INTERVAL = 1.25;
 
@@ -113,11 +121,16 @@ export class OrbitPunchSimulation {
     const direction = normalize({ x: origin.x - CENTER.x, y: origin.y - CENTER.y });
     this.punches.push({
       id: nextId++,
+      origin,
       pos: origin,
-      vel: { x: direction.x * PUNCH_SPEED, y: direction.y * PUNCH_SPEED },
-      radius: 15,
-      life: PUNCH_LIFE,
-      maxLife: PUNCH_LIFE
+      direction,
+      radius: 18,
+      distance: 0,
+      maxDistance: PUNCH_RANGE,
+      hold: PUNCH_HOLD_TIME,
+      life: 1,
+      maxLife: 1,
+      phase: "extending"
     });
     this.cooldown = PUNCH_COOLDOWN;
     return true;
@@ -139,11 +152,7 @@ export class OrbitPunchSimulation {
       this.spawnTimer = pace + Math.random() * 0.45;
     }
 
-    for (const punch of this.punches) {
-      punch.pos.x += punch.vel.x * dt;
-      punch.pos.y += punch.vel.y * dt;
-      punch.life -= dt;
-    }
+    this.updatePunches(dt);
 
     for (const meteor of this.meteors) {
       meteor.pos.x += meteor.vel.x * dt;
@@ -155,7 +164,7 @@ export class OrbitPunchSimulation {
     this.resolvePlanetImpacts(events);
 
     this.punches = this.punches.filter(
-      (punch) => punch.life > 0 && distance(punch.pos, CENTER) < OUTER_RADIUS
+      (punch) => punch.phase !== "returning" || punch.distance > PUNCH_RETURN_EPSILON
     );
     this.meteors = this.meteors.filter(
       (meteor) => meteor.alive && distance(meteor.pos, CENTER) < OUTER_RADIUS + 90
@@ -208,6 +217,54 @@ export class OrbitPunchSimulation {
     });
   }
 
+  private updatePunches(dt: number): void {
+    const currentOrigin = radialPoint(this.playerAngle, ORBIT_RADIUS + 21);
+
+    for (const punch of this.punches) {
+      punch.origin = { ...currentOrigin };
+
+      if (punch.phase === "extending") {
+        punch.distance = Math.min(punch.maxDistance, punch.distance + PUNCH_EXTEND_SPEED * dt);
+        punch.pos.x = punch.origin.x + punch.direction.x * punch.distance;
+        punch.pos.y = punch.origin.y + punch.direction.y * punch.distance;
+
+        if (punch.distance >= punch.maxDistance) {
+          punch.phase = "holding";
+        }
+      } else if (punch.phase === "holding") {
+        punch.hold -= dt;
+        punch.pos.x = punch.origin.x + punch.direction.x * punch.distance;
+        punch.pos.y = punch.origin.y + punch.direction.y * punch.distance;
+
+        if (punch.hold <= 0) {
+          punch.phase = "returning";
+        }
+      } else {
+        const toOrigin = {
+          x: punch.origin.x - punch.pos.x,
+          y: punch.origin.y - punch.pos.y
+        };
+        const remaining = Math.hypot(toOrigin.x, toOrigin.y);
+        const step = PUNCH_RETURN_SPEED * dt;
+
+        if (remaining <= step || remaining <= PUNCH_RETURN_EPSILON) {
+          punch.pos = { ...punch.origin };
+          punch.distance = 0;
+        } else {
+          punch.pos.x += (toOrigin.x / remaining) * step;
+          punch.pos.y += (toOrigin.y / remaining) * step;
+          punch.distance = distance(punch.pos, punch.origin);
+          punch.direction = normalize({
+            x: punch.pos.x - punch.origin.x,
+            y: punch.pos.y - punch.origin.y
+          });
+        }
+      }
+
+      punch.life = punch.maxLife * Math.max(0.2, punch.distance / punch.maxDistance);
+    }
+  }
+
   private resolveHits(events: SimulationEvents): void {
     for (const punch of this.punches) {
       for (const meteor of this.meteors) {
@@ -223,7 +280,7 @@ export class OrbitPunchSimulation {
         meteor.vel.x = outward.x * (280 + this.wave * 18);
         meteor.vel.y = outward.y * (280 + this.wave * 18);
         meteor.knocked = true;
-        punch.life = Math.min(punch.life, 0.08);
+        punch.phase = "returning";
         this.sparks.push({ pos: { ...meteor.pos }, life: 0.22, maxLife: 0.22 });
         this.defeated += 1;
         this.score += 100 + this.wave * 15;

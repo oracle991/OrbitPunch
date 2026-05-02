@@ -20,6 +20,8 @@ const palette = {
   meteor: 0xb4836a,
   meteorEdge: 0xffb36f,
   punch: 0x8cf7ff,
+  punchGlove: 0xffd56f,
+  punchShadow: 0x1b5c78,
   danger: 0xff6b6b,
   star: 0xd9fbff
 };
@@ -242,13 +244,93 @@ export class GameScene extends Phaser.Scene {
   private drawPunches(snapshot: SimulationSnapshot): void {
     for (const punch of snapshot.punches) {
       const alpha = Math.max(0, punch.life / punch.maxLife);
-      this.graphics.lineStyle(10, palette.punch, 0.14 * alpha);
-      this.graphics.strokeCircle(punch.pos.x, punch.pos.y, punch.radius + 10);
-      this.graphics.fillStyle(palette.punch, 0.78 * alpha);
-      this.graphics.fillCircle(punch.pos.x, punch.pos.y, punch.radius);
-      this.graphics.fillStyle(0xffffff, 0.72 * alpha);
-      this.graphics.fillCircle(punch.pos.x, punch.pos.y, punch.radius * 0.36);
+      const angle = Math.atan2(punch.direction.y, punch.direction.x);
+      const wristX = punch.pos.x - punch.direction.x * 20;
+      const wristY = punch.pos.y - punch.direction.y * 20;
+      const sideX = Math.cos(angle + Math.PI / 2);
+      const sideY = Math.sin(angle + Math.PI / 2);
+
+      this.graphics.lineStyle(24, palette.punchShadow, 0.24 * alpha);
+      this.graphics.beginPath();
+      this.graphics.moveTo(punch.origin.x, punch.origin.y);
+      this.graphics.lineTo(wristX, wristY);
+      this.graphics.strokePath();
+
+      this.graphics.lineStyle(15, palette.punch, 0.82 * alpha);
+      this.graphics.beginPath();
+      this.graphics.moveTo(punch.origin.x, punch.origin.y);
+      this.graphics.lineTo(wristX, wristY);
+      this.graphics.strokePath();
+
+      this.graphics.fillStyle(palette.punch, 0.9 * alpha);
+      this.graphics.fillCircle(punch.origin.x, punch.origin.y, 9);
+      this.graphics.fillCircle(wristX, wristY, 10);
+
+      this.graphics.fillStyle(palette.punchGlove, 1 * alpha);
+      this.fillRotatedEllipse(
+        punch.pos.x,
+        punch.pos.y,
+        punch.radius * 1.55,
+        punch.radius * 1.18,
+        angle
+      );
+      this.graphics.fillCircle(
+        punch.pos.x + punch.direction.x * 12,
+        punch.pos.y + punch.direction.y * 2,
+        punch.radius * 0.52
+      );
+
+      this.graphics.lineStyle(3, 0xfff6c4, 0.8 * alpha);
+      this.graphics.beginPath();
+      this.graphics.moveTo(
+        punch.pos.x + sideX * 4 - punch.direction.x * 5,
+        punch.pos.y + sideY * 4 - punch.direction.y * 5
+      );
+      this.graphics.lineTo(
+        punch.pos.x + sideX * 12 + punch.direction.x * 7,
+        punch.pos.y + sideY * 12 + punch.direction.y * 7
+      );
+      this.graphics.moveTo(
+        punch.pos.x - sideX * 4 - punch.direction.x * 5,
+        punch.pos.y - sideY * 4 - punch.direction.y * 5
+      );
+      this.graphics.lineTo(
+        punch.pos.x - sideX * 12 + punch.direction.x * 7,
+        punch.pos.y - sideY * 12 + punch.direction.y * 7
+      );
+      this.graphics.strokePath();
+
+      if (punch.phase === "holding") {
+        this.graphics.lineStyle(2, 0xffffff, 0.34);
+        this.graphics.strokeCircle(punch.pos.x, punch.pos.y, punch.radius + 11);
+      }
     }
+  }
+
+  private fillRotatedEllipse(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    rotation: number
+  ): void {
+    const points: Phaser.Types.Math.Vector2Like[] = [];
+    const radiusX = width / 2;
+    const radiusY = height / 2;
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+
+    for (let i = 0; i < 18; i += 1) {
+      const t = (i / 18) * Math.PI * 2;
+      const px = Math.cos(t) * radiusX;
+      const py = Math.sin(t) * radiusY;
+      points.push({
+        x: x + px * cos - py * sin,
+        y: y + px * sin + py * cos
+      });
+    }
+
+    this.graphics.fillPoints(points, true);
   }
 
   private drawMeteors(snapshot: SimulationSnapshot): void {
