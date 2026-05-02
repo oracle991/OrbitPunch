@@ -53,12 +53,10 @@ export const damageThreatByImpact = (
   state.score += 95 + state.wave * 18 + scoreBonus;
   state.sparks.push({ pos: { ...meteor.pos }, life: 0.24, maxLife: 0.24 });
   if (meteor.hp <= 0) {
-    knockMeteor(meteor, direction, speed, 580, chain);
-  } else {
-    meteor.pos.x += direction.x * 12;
-    meteor.pos.y += direction.y * 12;
-    meteor.vel.x = direction.x * Math.max(95, speed * 0.35);
-    meteor.vel.y = direction.y * Math.max(95, speed * 0.35);
+    meteor.alive = false;
+    state.defeated += 1;
+    state.score += 100 + state.wave * 15 + 580;
+    state.sparks.push({ pos: { ...meteor.pos }, life: 0.3, maxLife: 0.3 });
   }
 };
 

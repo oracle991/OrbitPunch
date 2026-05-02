@@ -270,21 +270,7 @@ export class OrbitPunchSimulation {
     const outward = normalize({ x: meteor.pos.x - CENTER.x, y: meteor.pos.y - CENTER.y });
     const hitDirection = direction ?? outward;
     if (meteor.kind === "miniBoss") {
-      if ((meteor.hitCooldown ?? 0) > 0) {
-        return;
-      }
-      meteor.hp -= 1;
-      meteor.hitCooldown = MINI_BOSS_HIT_COOLDOWN;
-      meteor.pos.x += outward.x * 9;
-      meteor.pos.y += outward.y * 9;
-      meteor.vel.x = outward.x * (70 + this.wave * 6);
-      meteor.vel.y = outward.y * (70 + this.wave * 6);
-      this.score += 55 + this.wave * 12;
-      this.sparks.push({ pos: { ...meteor.pos }, life: 0.2, maxLife: 0.2 });
-
-      if (meteor.hp <= 0) {
-        this.knockMeteor(meteor, hitDirection, PUNCH_KNOCK_SPEED + this.wave * 16, 520, 2);
-      }
+      this.damageMiniBoss(meteor, 1, 55 + this.wave * 12, MINI_BOSS_HIT_COOLDOWN, 520);
       punch.phase = "returning";
       return;
     }
@@ -322,10 +308,14 @@ export class OrbitPunchSimulation {
         const target = source === first ? second : first;
         const normal = this.impactNormal(source, target);
         const overlap = minDistance - actualDistance + 0.1;
-        source.pos.x -= normal.x * overlap * 0.35;
-        source.pos.y -= normal.y * overlap * 0.35;
-        target.pos.x += normal.x * overlap * 0.65;
-        target.pos.y += normal.y * overlap * 0.65;
+        if (source.kind !== "miniBoss") {
+          source.pos.x -= normal.x * overlap * 0.35;
+          source.pos.y -= normal.y * overlap * 0.35;
+        }
+        if (target.kind !== "miniBoss") {
+          target.pos.x += normal.x * overlap * 0.65;
+          target.pos.y += normal.y * overlap * 0.65;
+        }
 
         if (!target.knocked) {
           const chainCount = Math.max(1, source.chain) + 1;
@@ -425,6 +415,14 @@ export class OrbitPunchSimulation {
         y: playerPos.y - CENTER.y
       });
       const knockDirection = length(direction) > 0.001 ? direction : fallbackDirection;
+      if (meteor.kind === "miniBoss") {
+        this.damageMiniBoss(meteor, 1, 45 + this.wave * 10, MINI_BOSS_HIT_COOLDOWN, 420);
+        this.cooldown = Math.max(this.cooldown, SATELLITE_HIT_LOCKOUT);
+        events.hit = true;
+        events.satelliteHit = true;
+        continue;
+      }
+
       const overlap = SATELLITE_RADIUS + meteor.radius - distance(meteor.pos, playerPos) + 0.1;
       meteor.pos.x += knockDirection.x * overlap;
       meteor.pos.y += knockDirection.y * overlap;
@@ -482,6 +480,35 @@ export class OrbitPunchSimulation {
     this.defeated += 1;
     this.score += 100 + this.wave * 15 + scoreBonus;
     this.wave = 1 + Math.floor(this.defeated / 8);
+  }
+
+  private damageMiniBoss(
+    meteor: Meteor,
+    damage: number,
+    score: number,
+    cooldown: number,
+    defeatScoreBonus = 0
+  ): void {
+    if ((meteor.hitCooldown ?? 0) > 0) {
+      return;
+    }
+
+    meteor.hp -= damage;
+    meteor.hitCooldown = cooldown;
+    this.score += score;
+    this.sparks.push({ pos: { ...meteor.pos }, life: 0.2, maxLife: 0.2 });
+
+    if (meteor.hp <= 0) {
+      this.defeatMiniBoss(meteor, defeatScoreBonus);
+    }
+  }
+
+  private defeatMiniBoss(meteor: Meteor, scoreBonus = 0): void {
+    meteor.alive = false;
+    this.defeated += 1;
+    this.score += 100 + this.wave * 15 + scoreBonus;
+    this.wave = 1 + Math.floor(this.defeated / 8);
+    this.sparks.push({ pos: { ...meteor.pos }, life: 0.3, maxLife: 0.3 });
   }
 
   private deflectMeteor(meteor: Meteor, direction: Vec2, speed: number, chain = 1): void {
