@@ -69,6 +69,8 @@ const PUNCH_HOLD_TIME = 0.24;
 const PUNCH_COOLDOWN = 0.56;
 const PUNCH_RETURN_EPSILON = 6;
 const METEOR_BASE_SPEED = 54;
+const PUNCH_KNOCK_SPEED = 280;
+const CHAIN_KNOCK_SPEED = 238;
 const SPAWN_BASE_INTERVAL = 1.25;
 
 let nextId = 1;
@@ -84,6 +86,8 @@ const normalize = (v: Vec2): Vec2 => {
   const length = Math.hypot(v.x, v.y) || 1;
   return { x: v.x / length, y: v.y / length };
 };
+
+const length = (v: Vec2): number => Math.hypot(v.x, v.y);
 
 export class OrbitPunchSimulation {
   private playerAngle = -Math.PI / 2;
@@ -161,6 +165,7 @@ export class OrbitPunchSimulation {
     }
 
     this.resolveHits(events);
+    this.resolveMeteorImpacts(events);
     this.resolvePlanetImpacts(events);
 
     this.punches = this.punches.filter(
@@ -277,17 +282,92 @@ export class OrbitPunchSimulation {
         }
 
         const outward = normalize({ x: meteor.pos.x - CENTER.x, y: meteor.pos.y - CENTER.y });
-        meteor.vel.x = outward.x * (280 + this.wave * 18);
-        meteor.vel.y = outward.y * (280 + this.wave * 18);
-        meteor.knocked = true;
+        this.knockMeteor(meteor, outward, PUNCH_KNOCK_SPEED + this.wave * 18);
         punch.phase = "returning";
-        this.sparks.push({ pos: { ...meteor.pos }, life: 0.22, maxLife: 0.22 });
-        this.defeated += 1;
-        this.score += 100 + this.wave * 15;
-        this.wave = 1 + Math.floor(this.defeated / 8);
         events.hit = true;
       }
     }
+  }
+
+  private resolveMeteorImpacts(events: SimulationEvents): void {
+    for (let i = 0; i < this.meteors.length; i += 1) {
+      const first = this.meteors[i];
+      if (!first.alive) {
+        continue;
+      }
+
+      for (let j = i + 1; j < this.meteors.length; j += 1) {
+        const second = this.meteors[j];
+        if (!second.alive || (!first.knocked && !second.knocked)) {
+          continue;
+        }
+
+        const minDistance = first.radius + second.radius;
+        const actualDistance = distance(first.pos, second.pos);
+        if (actualDistance > minDistance) {
+          continue;
+        }
+
+        const source = this.pickImpactSource(first, second);
+        const target = source === first ? second : first;
+        const normal = this.impactNormal(source, target);
+        const overlap = minDistance - actualDistance + 0.1;
+        source.pos.x -= normal.x * overlap * 0.35;
+        source.pos.y -= normal.y * overlap * 0.35;
+        target.pos.x += normal.x * overlap * 0.65;
+        target.pos.y += normal.y * overlap * 0.65;
+
+        if (!target.knocked) {
+          const transferredSpeed = Math.max(
+            CHAIN_KNOCK_SPEED + this.wave * 12,
+            length(source.vel) * 0.82
+          );
+          this.knockMeteor(target, normal, transferredSpeed, 140);
+          source.vel.x *= 0.9;
+          source.vel.y *= 0.9;
+          events.hit = true;
+        } else {
+          const sourceNormalVelocity = source.vel.x * normal.x + source.vel.y * normal.y;
+          const targetNormalVelocity = target.vel.x * normal.x + target.vel.y * normal.y;
+          const impulse = Math.max(0, sourceNormalVelocity - targetNormalVelocity) * 0.5;
+          source.vel.x -= normal.x * impulse;
+          source.vel.y -= normal.y * impulse;
+          target.vel.x += normal.x * impulse;
+          target.vel.y += normal.y * impulse;
+        }
+      }
+    }
+  }
+
+  private pickImpactSource(first: Meteor, second: Meteor): Meteor {
+    if (first.knocked && !second.knocked) {
+      return first;
+    }
+    if (second.knocked && !first.knocked) {
+      return second;
+    }
+    return length(first.vel) >= length(second.vel) ? first : second;
+  }
+
+  private impactNormal(source: Meteor, target: Meteor): Vec2 {
+    const between = { x: target.pos.x - source.pos.x, y: target.pos.y - source.pos.y };
+    if (length(between) > 0.001) {
+      return normalize(between);
+    }
+    return normalize({
+      x: source.vel.x - target.vel.x,
+      y: source.vel.y - target.vel.y
+    });
+  }
+
+  private knockMeteor(meteor: Meteor, direction: Vec2, speed: number, scoreBonus = 0): void {
+    meteor.vel.x = direction.x * speed;
+    meteor.vel.y = direction.y * speed;
+    meteor.knocked = true;
+    this.sparks.push({ pos: { ...meteor.pos }, life: 0.22, maxLife: 0.22 });
+    this.defeated += 1;
+    this.score += 100 + this.wave * 15 + scoreBonus;
+    this.wave = 1 + Math.floor(this.defeated / 8);
   }
 
   private resolvePlanetImpacts(events: SimulationEvents): void {
