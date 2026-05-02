@@ -71,6 +71,7 @@ const PUNCH_RETURN_EPSILON = 6;
 const METEOR_BASE_SPEED = 54;
 const PUNCH_KNOCK_SPEED = 280;
 const CHAIN_KNOCK_SPEED = 238;
+const PUNCH_CHAIN_RADIUS = 9;
 const SPAWN_BASE_INTERVAL = 1.25;
 
 let nextId = 1;
@@ -88,6 +89,26 @@ const normalize = (v: Vec2): Vec2 => {
 };
 
 const length = (v: Vec2): number => Math.hypot(v.x, v.y);
+
+const closestPointOnSegment = (point: Vec2, start: Vec2, end: Vec2): Vec2 => {
+  const segment = { x: end.x - start.x, y: end.y - start.y };
+  const segmentLengthSq = segment.x * segment.x + segment.y * segment.y;
+  if (segmentLengthSq <= 0.001) {
+    return { ...start };
+  }
+
+  const t = Math.max(
+    0,
+    Math.min(
+      1,
+      ((point.x - start.x) * segment.x + (point.y - start.y) * segment.y) / segmentLengthSq
+    )
+  );
+  return {
+    x: start.x + segment.x * t,
+    y: start.y + segment.y * t
+  };
+};
 
 export class OrbitPunchSimulation {
   private playerAngle = -Math.PI / 2;
@@ -273,16 +294,40 @@ export class OrbitPunchSimulation {
   private resolveHits(events: SimulationEvents): void {
     for (const punch of this.punches) {
       for (const meteor of this.meteors) {
-        if (
-          !meteor.alive ||
-          meteor.knocked ||
-          distance(punch.pos, meteor.pos) > punch.radius + meteor.radius
-        ) {
+        if (!meteor.alive || meteor.knocked) {
           continue;
         }
 
-        const outward = normalize({ x: meteor.pos.x - CENTER.x, y: meteor.pos.y - CENTER.y });
-        this.knockMeteor(meteor, outward, PUNCH_KNOCK_SPEED + this.wave * 18);
+        if (distance(punch.pos, meteor.pos) <= punch.radius + meteor.radius) {
+          const outward = normalize({ x: meteor.pos.x - CENTER.x, y: meteor.pos.y - CENTER.y });
+          this.knockMeteor(meteor, outward, PUNCH_KNOCK_SPEED + this.wave * 18);
+          punch.phase = "returning";
+          events.hit = true;
+          continue;
+        }
+
+        const wrist = {
+          x: punch.pos.x - punch.direction.x * 20,
+          y: punch.pos.y - punch.direction.y * 20
+        };
+        const closest = closestPointOnSegment(meteor.pos, punch.origin, wrist);
+        if (distance(closest, meteor.pos) > PUNCH_CHAIN_RADIUS + meteor.radius) {
+          continue;
+        }
+
+        const contactDirection = normalize({
+          x: meteor.pos.x - closest.x,
+          y: meteor.pos.y - closest.y
+        });
+        const fallbackDirection = normalize({
+          x: meteor.pos.x - CENTER.x,
+          y: meteor.pos.y - CENTER.y
+        });
+        this.knockMeteor(
+          meteor,
+          length(contactDirection) > 0.001 ? contactDirection : fallbackDirection,
+          PUNCH_KNOCK_SPEED + this.wave * 18
+        );
         punch.phase = "returning";
         events.hit = true;
       }
