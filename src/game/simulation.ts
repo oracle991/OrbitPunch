@@ -36,6 +36,9 @@ const SATELLITE_KNOCK_SPEED = 250;
 const SATELLITE_HIT_LOCKOUT = 1.35;
 const PUNCH_CHAIN_RADIUS = 9;
 const SPAWN_BASE_INTERVAL = 1.25;
+const MAX_PLANET_HP = 100;
+const CHAIN_SHIELD_RECOVERY = 4;
+const MAX_CHAIN_SHIELD_RECOVERY = 12;
 
 let nextId = 1;
 
@@ -50,7 +53,7 @@ export class OrbitPunchSimulation {
   private wave = 1;
   private defeated = 0;
   private miniBossWave = 0;
-  private planetHp = 100;
+  private planetHp = MAX_PLANET_HP;
   private gameOver = true;
 
   public start(): void {
@@ -64,7 +67,7 @@ export class OrbitPunchSimulation {
     this.wave = 1;
     this.defeated = 0;
     this.miniBossWave = 0;
-    this.planetHp = 100;
+    this.planetHp = MAX_PLANET_HP;
     this.gameOver = false;
   }
 
@@ -166,7 +169,7 @@ export class OrbitPunchSimulation {
       score: this.score,
       wave: this.wave,
       planetHp: this.planetHp,
-      maxPlanetHp: 100,
+      maxPlanetHp: MAX_PLANET_HP,
       cooldown: this.cooldown,
       cooldownMax: this.cooldown > PUNCH_COOLDOWN ? SATELLITE_HIT_LOCKOUT : PUNCH_COOLDOWN,
       gameOver: this.gameOver
@@ -331,9 +334,11 @@ export class OrbitPunchSimulation {
             length(source.vel) * 0.82
           );
           this.damageByImpact(target, normal, transferredSpeed, 140, chainCount);
+          const shieldRecovery = this.recoverPlanetShield(chainCount);
           events.chainHits.push({
             pos: this.impactPoint(source, target, normal),
-            count: chainCount
+            count: chainCount,
+            shieldRecovery
           });
           source.vel.x *= 0.9;
           source.vel.y *= 0.9;
@@ -384,8 +389,15 @@ export class OrbitPunchSimulation {
 
   private applyExplosion(core: Meteor, events: SimulationEvents, chain: number): void {
     const state = this.effectState();
-    const result = explodeCore(core, this.meteors, events, chain, state, (...args) =>
-      damageThreatByImpact(...args, state, (...knockArgs) => this.knockMeteor(...knockArgs))
+    const result = explodeCore(
+      core,
+      this.meteors,
+      events,
+      chain,
+      state,
+      (...args) =>
+        damageThreatByImpact(...args, state, (...knockArgs) => this.knockMeteor(...knockArgs)),
+      (chainCount) => this.recoverPlanetShield(chainCount)
     );
     this.defeated = result.defeated;
     this.score = result.score;
@@ -478,6 +490,17 @@ export class OrbitPunchSimulation {
     meteor.knocked = true;
     meteor.chain = chain;
     this.sparks.push({ pos: { ...meteor.pos }, life: 0.22, maxLife: 0.22 });
+  }
+
+  private recoverPlanetShield(chain: number): number {
+    if (this.planetHp >= MAX_PLANET_HP) {
+      return 0;
+    }
+
+    const recovery = Math.min(MAX_CHAIN_SHIELD_RECOVERY, CHAIN_SHIELD_RECOVERY + chain);
+    const before = this.planetHp;
+    this.planetHp = Math.min(MAX_PLANET_HP, this.planetHp + recovery);
+    return this.planetHp - before;
   }
 
   private resolvePlanetImpacts(events: SimulationEvents): void {

@@ -74,7 +74,8 @@ export const explodeCore = (
     speed: number,
     scoreBonus: number,
     chain: number
-  ) => void
+  ) => void,
+  recoverShield: (chain: number) => number = () => 0
 ): ThreatEffectResult => {
   if (!core.alive) {
     return finish(state);
@@ -97,15 +98,19 @@ export const explodeCore = (
 
     const direction = normalize({ x: target.pos.x - core.pos.x, y: target.pos.y - core.pos.y });
     const blastSpeed = PUNCH_KNOCK_SPEED + 70 + Math.max(0, EXPLOSION_RADIUS - blastDistance) * 0.7;
+    const nextChain = chain + 1;
+    let shieldRecovery = 0;
     if (target.knocked) {
       target.vel.x += direction.x * blastSpeed * 0.38;
       target.vel.y += direction.y * blastSpeed * 0.38;
     } else {
-      damageByImpact(target, direction, blastSpeed, 240, chain + 1);
+      damageByImpact(target, direction, blastSpeed, 240, nextChain);
+      shieldRecovery = recoverShield(nextChain);
     }
     events.chainHits.push({
       pos: { ...target.pos },
-      count: chain + 1
+      count: nextChain,
+      shieldRecovery
     });
   }
 

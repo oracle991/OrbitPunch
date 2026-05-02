@@ -138,14 +138,19 @@ export class GameScene extends Phaser.Scene {
     ).normalize();
     const x = Phaser.Math.Clamp(chainHit.pos.x + outward.x * 14, 58, world.width - 58);
     const y = Phaser.Math.Clamp(chainHit.pos.y + outward.y * 14, 42, world.height - 42);
+    const recoveryText =
+      chainHit.shieldRecovery && chainHit.shieldRecovery > 0
+        ? `\n+${chainHit.shieldRecovery} shield`
+        : "";
     const label = this.add
-      .text(x, y, `${chainHit.count} hits!`, {
+      .text(x, y, `${chainHit.count} hits!${recoveryText}`, {
         color: "#fff6c4",
         fontFamily: "Inter, Arial, sans-serif",
-        fontSize: "25px",
+        fontSize: "23px",
         fontStyle: "900",
         stroke: "#102032",
-        strokeThickness: 5
+        strokeThickness: 5,
+        align: "center"
       })
       .setOrigin(0.5)
       .setDepth(20)

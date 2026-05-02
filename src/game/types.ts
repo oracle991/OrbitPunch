@@ -51,6 +51,7 @@ export type HitSpark = {
 export type ChainHit = {
   pos: Vec2;
   count: number;
+  shieldRecovery?: number;
 };
 
 export type SimulationSnapshot = {
