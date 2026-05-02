@@ -77,6 +77,10 @@ export class GameScene extends Phaser.Scene {
       this.hitStop = 0.035;
       this.shakeTime = 0.16;
     }
+    if (events.satelliteHit) {
+      this.hitStop = 0.05;
+      this.shakeTime = 0.22;
+    }
     if (events.planetHit) {
       this.shakeTime = 0.25;
     }

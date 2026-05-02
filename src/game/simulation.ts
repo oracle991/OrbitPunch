@@ -50,6 +50,7 @@ export type SimulationSnapshot = {
 
 export type SimulationEvents = {
   hit: boolean;
+  satelliteHit: boolean;
   planetHit: boolean;
   gameOver: boolean;
 };
@@ -60,6 +61,7 @@ const CENTER: Vec2 = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
 const PLANET_RADIUS = 62;
 const ORBIT_RADIUS = 136;
 const OUTER_RADIUS = 500;
+const SATELLITE_RADIUS = 16;
 
 const PLAYER_ORBIT_SPEED = 1.95;
 const PUNCH_EXTEND_SPEED = 480;
@@ -70,6 +72,8 @@ const PUNCH_COOLDOWN = 0.56;
 const PUNCH_RETURN_EPSILON = 6;
 const METEOR_BASE_SPEED = 54;
 const PUNCH_KNOCK_SPEED = 280;
+const SATELLITE_KNOCK_SPEED = 250;
+const SATELLITE_HIT_LOCKOUT = 1.35;
 const CHAIN_KNOCK_SPEED = 238;
 const PUNCH_CHAIN_RADIUS = 9;
 const SPAWN_BASE_INTERVAL = 1.25;
@@ -162,7 +166,7 @@ export class OrbitPunchSimulation {
   }
 
   public update(dt: number): SimulationEvents {
-    const events = { hit: false, planetHit: false, gameOver: false };
+    const events = { hit: false, satelliteHit: false, planetHit: false, gameOver: false };
     if (this.gameOver) {
       return events;
     }
@@ -186,6 +190,7 @@ export class OrbitPunchSimulation {
     }
 
     this.resolveHits(events);
+    this.resolveSatelliteImpacts(events);
     this.resolveMeteorImpacts(events);
     this.resolvePlanetImpacts(events);
 
@@ -222,7 +227,7 @@ export class OrbitPunchSimulation {
       planetHp: this.planetHp,
       maxPlanetHp: 100,
       cooldown: this.cooldown,
-      cooldownMax: PUNCH_COOLDOWN,
+      cooldownMax: this.cooldown > PUNCH_COOLDOWN ? SATELLITE_HIT_LOCKOUT : PUNCH_COOLDOWN,
       gameOver: this.gameOver
     };
   }
@@ -384,6 +389,37 @@ export class OrbitPunchSimulation {
     }
   }
 
+  private resolveSatelliteImpacts(events: SimulationEvents): void {
+    const playerPos = radialPoint(this.playerAngle, ORBIT_RADIUS);
+
+    for (const meteor of this.meteors) {
+      if (
+        !meteor.alive ||
+        meteor.knocked ||
+        distance(meteor.pos, playerPos) > SATELLITE_RADIUS + meteor.radius
+      ) {
+        continue;
+      }
+
+      const direction = normalize({
+        x: meteor.pos.x - playerPos.x,
+        y: meteor.pos.y - playerPos.y
+      });
+      const fallbackDirection = normalize({
+        x: playerPos.x - CENTER.x,
+        y: playerPos.y - CENTER.y
+      });
+      const knockDirection = length(direction) > 0.001 ? direction : fallbackDirection;
+      const overlap = SATELLITE_RADIUS + meteor.radius - distance(meteor.pos, playerPos) + 0.1;
+      meteor.pos.x += knockDirection.x * overlap;
+      meteor.pos.y += knockDirection.y * overlap;
+      this.deflectMeteor(meteor, knockDirection, SATELLITE_KNOCK_SPEED + this.wave * 14);
+      this.cooldown = Math.max(this.cooldown, SATELLITE_HIT_LOCKOUT);
+      events.hit = true;
+      events.satelliteHit = true;
+    }
+  }
+
   private pickImpactSource(first: Meteor, second: Meteor): Meteor {
     if (first.knocked && !second.knocked) {
       return first;
@@ -406,13 +442,17 @@ export class OrbitPunchSimulation {
   }
 
   private knockMeteor(meteor: Meteor, direction: Vec2, speed: number, scoreBonus = 0): void {
+    this.deflectMeteor(meteor, direction, speed);
+    this.defeated += 1;
+    this.score += 100 + this.wave * 15 + scoreBonus;
+    this.wave = 1 + Math.floor(this.defeated / 8);
+  }
+
+  private deflectMeteor(meteor: Meteor, direction: Vec2, speed: number): void {
     meteor.vel.x = direction.x * speed;
     meteor.vel.y = direction.y * speed;
     meteor.knocked = true;
     this.sparks.push({ pos: { ...meteor.pos }, life: 0.22, maxLife: 0.22 });
-    this.defeated += 1;
-    this.score += 100 + this.wave * 15 + scoreBonus;
-    this.wave = 1 + Math.floor(this.defeated / 8);
   }
 
   private resolvePlanetImpacts(events: SimulationEvents): void {
