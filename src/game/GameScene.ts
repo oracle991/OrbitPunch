@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { OrbitPunchSimulation, type SimulationSnapshot, world } from "./simulation";
+import { OrbitPunchSimulation, type ChainHit, type SimulationSnapshot, world } from "./simulation";
 
 type HudElements = {
   hpBar: HTMLElement;
@@ -32,6 +32,7 @@ export class GameScene extends Phaser.Scene {
   private graphics!: Phaser.GameObjects.Graphics;
   private shakeTime = 0;
   private hitStop = 0;
+  private hitLabels: Phaser.GameObjects.Text[] = [];
 
   public constructor(hud: HudElements) {
     super("game");
@@ -73,6 +74,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     const events = this.sim.update(dt);
+    for (const chainHit of events.chainHits) {
+      this.spawnHitLabel(chainHit);
+    }
     if (events.hit) {
       this.hitStop = 0.035;
       this.shakeTime = 0.16;
@@ -100,6 +104,10 @@ export class GameScene extends Phaser.Scene {
     this.sim.start();
     this.hitStop = 0;
     this.shakeTime = 0;
+    for (const label of this.hitLabels) {
+      label.destroy();
+    }
+    this.hitLabels = [];
     this.cameras.main.setScroll(0, 0);
     this.hud.overlay.classList.add("hidden");
   }
@@ -133,6 +141,50 @@ export class GameScene extends Phaser.Scene {
       });
     }
     this.hud.overlay.classList.remove("hidden");
+  }
+
+  private spawnHitLabel(chainHit: ChainHit): void {
+    const outward = new Phaser.Math.Vector2(
+      chainHit.pos.x - world.center.x,
+      chainHit.pos.y - world.center.y
+    ).normalize();
+    const x = Phaser.Math.Clamp(chainHit.pos.x + outward.x * 14, 58, world.width - 58);
+    const y = Phaser.Math.Clamp(chainHit.pos.y + outward.y * 14, 42, world.height - 42);
+    const label = this.add
+      .text(x, y, `${chainHit.count} hits!`, {
+        color: "#fff6c4",
+        fontFamily: "Inter, Arial, sans-serif",
+        fontSize: "25px",
+        fontStyle: "900",
+        stroke: "#102032",
+        strokeThickness: 5
+      })
+      .setOrigin(0.5)
+      .setDepth(20)
+      .setAlpha(0);
+
+    this.hitLabels.push(label);
+    this.tweens.add({
+      targets: label,
+      alpha: { from: 0, to: 1 },
+      y: y - 26,
+      scale: { from: 0.82, to: 1.18 },
+      duration: 150,
+      ease: "Back.Out"
+    });
+    this.tweens.add({
+      targets: label,
+      alpha: 0,
+      y: y - 52,
+      scale: 1,
+      delay: 360,
+      duration: 260,
+      ease: "Cubic.In",
+      onComplete: () => {
+        this.hitLabels = this.hitLabels.filter((item) => item !== label);
+        label.destroy();
+      }
+    });
   }
 
   private render(snapshot: SimulationSnapshot, dt: number): void {

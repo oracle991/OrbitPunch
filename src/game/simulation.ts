@@ -10,6 +10,7 @@ export type Meteor = {
   radius: number;
   alive: boolean;
   knocked: boolean;
+  chain: number;
   spin: number;
 };
 
@@ -33,6 +34,11 @@ export type HitSpark = {
   maxLife: number;
 };
 
+export type ChainHit = {
+  pos: Vec2;
+  count: number;
+};
+
 export type SimulationSnapshot = {
   playerAngle: number;
   playerPos: Vec2;
@@ -53,6 +59,7 @@ export type SimulationEvents = {
   satelliteHit: boolean;
   planetHit: boolean;
   gameOver: boolean;
+  chainHits: ChainHit[];
 };
 
 const WORLD_WIDTH = 960;
@@ -166,7 +173,13 @@ export class OrbitPunchSimulation {
   }
 
   public update(dt: number): SimulationEvents {
-    const events = { hit: false, satelliteHit: false, planetHit: false, gameOver: false };
+    const events = {
+      hit: false,
+      satelliteHit: false,
+      planetHit: false,
+      gameOver: false,
+      chainHits: []
+    };
     if (this.gameOver) {
       return events;
     }
@@ -244,6 +257,7 @@ export class OrbitPunchSimulation {
       radius: 25 + Math.random() * 7,
       alive: true,
       knocked: false,
+      chain: 0,
       spin: Math.random() * Math.PI * 2
     });
   }
@@ -368,11 +382,16 @@ export class OrbitPunchSimulation {
         target.pos.y += normal.y * overlap * 0.65;
 
         if (!target.knocked) {
+          const chainCount = Math.max(1, source.chain) + 1;
           const transferredSpeed = Math.max(
             CHAIN_KNOCK_SPEED + this.wave * 12,
             length(source.vel) * 0.82
           );
-          this.knockMeteor(target, normal, transferredSpeed, 140);
+          this.knockMeteor(target, normal, transferredSpeed, 140, chainCount);
+          events.chainHits.push({
+            pos: this.impactPoint(source, target, normal),
+            count: chainCount
+          });
           source.vel.x *= 0.9;
           source.vel.y *= 0.9;
           events.hit = true;
@@ -441,17 +460,39 @@ export class OrbitPunchSimulation {
     });
   }
 
-  private knockMeteor(meteor: Meteor, direction: Vec2, speed: number, scoreBonus = 0): void {
-    this.deflectMeteor(meteor, direction, speed);
+  private impactPoint(source: Meteor, target: Meteor, normal: Vec2): Vec2 {
+    const sourceEdge = {
+      x: source.pos.x + normal.x * source.radius,
+      y: source.pos.y + normal.y * source.radius
+    };
+    const targetEdge = {
+      x: target.pos.x - normal.x * target.radius,
+      y: target.pos.y - normal.y * target.radius
+    };
+    return {
+      x: (sourceEdge.x + targetEdge.x) * 0.5,
+      y: (sourceEdge.y + targetEdge.y) * 0.5
+    };
+  }
+
+  private knockMeteor(
+    meteor: Meteor,
+    direction: Vec2,
+    speed: number,
+    scoreBonus = 0,
+    chain = 1
+  ): void {
+    this.deflectMeteor(meteor, direction, speed, chain);
     this.defeated += 1;
     this.score += 100 + this.wave * 15 + scoreBonus;
     this.wave = 1 + Math.floor(this.defeated / 8);
   }
 
-  private deflectMeteor(meteor: Meteor, direction: Vec2, speed: number): void {
+  private deflectMeteor(meteor: Meteor, direction: Vec2, speed: number, chain = 1): void {
     meteor.vel.x = direction.x * speed;
     meteor.vel.y = direction.y * speed;
     meteor.knocked = true;
+    meteor.chain = chain;
     this.sparks.push({ pos: { ...meteor.pos }, life: 0.22, maxLife: 0.22 });
   }
 
