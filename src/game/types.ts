@@ -25,6 +25,10 @@ export type Meteor = {
   orbitAngle?: number;
   orbitRadius?: number;
   orbitSpeed?: number;
+  orbitPhase?: number;
+  orbitMajorRadius?: number;
+  orbitMinorRadius?: number;
+  orbitDirection?: number;
   hitCooldown?: number;
 };
 

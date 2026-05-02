@@ -1,4 +1,4 @@
-import { distance, normalize, radialPoint } from "../math";
+import { distance, normalize } from "../math";
 import type { Meteor } from "../types";
 import { CENTER } from "../world";
 import { TRACTOR_PULL, TRACTOR_RANGE } from "./config";
@@ -7,22 +7,54 @@ export const updateThreat = (meteor: Meteor, dt: number): void => {
   if (
     meteor.kind === "orbitalSatellite" &&
     !meteor.knocked &&
-    meteor.orbitRadius !== undefined &&
     meteor.orbitAngle !== undefined &&
     meteor.orbitSpeed !== undefined &&
-    distance(meteor.pos, CENTER) <= meteor.orbitRadius
+    meteor.orbitPhase !== undefined &&
+    meteor.orbitMajorRadius !== undefined &&
+    meteor.orbitMinorRadius !== undefined &&
+    meteor.orbitDirection !== undefined
   ) {
-    meteor.orbitAngle += meteor.orbitSpeed * dt;
-    meteor.pos = radialPoint(meteor.orbitAngle, meteor.orbitRadius);
-    meteor.vel = {
-      x: -Math.sin(meteor.orbitAngle) * meteor.orbitSpeed * meteor.orbitRadius,
-      y: Math.cos(meteor.orbitAngle) * meteor.orbitSpeed * meteor.orbitRadius
-    };
+    updateOrbitalSatellite(meteor, dt);
     return;
   }
 
   meteor.pos.x += meteor.vel.x * dt;
   meteor.pos.y += meteor.vel.y * dt;
+};
+
+const updateOrbitalSatellite = (meteor: Meteor, dt: number): void => {
+  const previous = { ...meteor.pos };
+  meteor.orbitPhase = Math.min(Math.PI, (meteor.orbitPhase ?? 0) + (meteor.orbitSpeed ?? 0) * dt);
+  meteor.pos = ellipticalOrbitPoint(meteor);
+
+  if (dt > 0) {
+    meteor.vel = {
+      x: (meteor.pos.x - previous.x) / dt,
+      y: (meteor.pos.y - previous.y) / dt
+    };
+  }
+
+  if (meteor.orbitPhase >= Math.PI) {
+    meteor.alive = false;
+  }
+};
+
+const ellipticalOrbitPoint = (meteor: Meteor): Meteor["pos"] => {
+  const angle = meteor.orbitAngle ?? 0;
+  const phase = meteor.orbitPhase ?? 0;
+  const majorRadius = meteor.orbitMajorRadius ?? 0;
+  const minorRadius = meteor.orbitMinorRadius ?? 0;
+  const direction = meteor.orbitDirection ?? 1;
+  const radial = { x: Math.cos(angle), y: Math.sin(angle) };
+  const tangent = {
+    x: -Math.sin(angle) * direction,
+    y: Math.cos(angle) * direction
+  };
+
+  return {
+    x: CENTER.x + radial.x * Math.cos(phase) * majorRadius + tangent.x * Math.sin(phase) * minorRadius,
+    y: CENTER.y + radial.y * Math.cos(phase) * majorRadius + tangent.y * Math.sin(phase) * minorRadius
+  };
 };
 
 export const applyTractorPull = (meteors: Meteor[], wave: number, dt: number): void => {
