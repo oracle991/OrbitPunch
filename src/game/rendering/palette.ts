@@ -1,0 +1,23 @@
+export const palette = {
+  orbit: 0x92e7ff,
+  planetOcean: 0x2ca7d8,
+  planetLand: 0xa6d66b,
+  shield: 0x74f1ff,
+  player: 0xf8d45f,
+  playerCore: 0xffffff,
+  meteor: 0xb4836a,
+  meteorEdge: 0xffb36f,
+  orbitalSatellite: 0xaeb9c9,
+  orbitalPanel: 0x6bdff0,
+  explosiveCore: 0xff5b3f,
+  explosiveGlow: 0xffc25f,
+  tractorDrone: 0x8fe36b,
+  tractorBeam: 0xb8ff9f,
+  miniBoss: 0x8554d6,
+  miniBossCore: 0xfff0a8,
+  punch: 0x8cf7ff,
+  punchGlove: 0xffd56f,
+  punchShadow: 0x1b5c78,
+  danger: 0xff6b6b,
+  star: 0xd9fbff
+};

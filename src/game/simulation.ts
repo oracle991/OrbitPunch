@@ -1,88 +1,29 @@
-export type Vec2 = {
-  x: number;
-  y: number;
-};
+import { closestPointOnSegment, distance, length, normalize, radialPoint } from "./math";
+import { damageThreatByImpact, explodeCore, planetDamage } from "./threats/effects";
+import { CHAIN_KNOCK_SPEED, MINI_BOSS_HIT_COOLDOWN, PUNCH_KNOCK_SPEED } from "./threats/config";
+import { applyTractorPull, updateThreat } from "./threats/update";
+import { spawnThreat } from "./threats/spawn";
+import type {
+  HitSpark,
+  Meteor,
+  Punch,
+  SimulationEvents,
+  SimulationSnapshot,
+  Vec2
+} from "./types";
+import { CENTER, ORBIT_RADIUS, OUTER_RADIUS, PLANET_RADIUS, SATELLITE_RADIUS } from "./world";
 
-export type ThreatKind =
-  | "meteor"
-  | "orbitalSatellite"
-  | "explosiveCore"
-  | "tractorDrone"
-  | "miniBoss";
-
-export type Meteor = {
-  id: number;
-  kind: ThreatKind;
-  pos: Vec2;
-  vel: Vec2;
-  radius: number;
-  alive: boolean;
-  knocked: boolean;
-  chain: number;
-  spin: number;
-  hp: number;
-  maxHp: number;
-  orbitAngle?: number;
-  orbitRadius?: number;
-  orbitSpeed?: number;
-  hitCooldown?: number;
-};
-
-export type Punch = {
-  id: number;
-  origin: Vec2;
-  pos: Vec2;
-  direction: Vec2;
-  radius: number;
-  distance: number;
-  maxDistance: number;
-  hold: number;
-  life: number;
-  maxLife: number;
-  phase: "extending" | "holding" | "returning";
-};
-
-export type HitSpark = {
-  pos: Vec2;
-  life: number;
-  maxLife: number;
-};
-
-export type ChainHit = {
-  pos: Vec2;
-  count: number;
-};
-
-export type SimulationSnapshot = {
-  playerAngle: number;
-  playerPos: Vec2;
-  meteors: Meteor[];
-  punches: Punch[];
-  sparks: HitSpark[];
-  score: number;
-  wave: number;
-  planetHp: number;
-  maxPlanetHp: number;
-  cooldown: number;
-  cooldownMax: number;
-  gameOver: boolean;
-};
-
-export type SimulationEvents = {
-  hit: boolean;
-  satelliteHit: boolean;
-  planetHit: boolean;
-  gameOver: boolean;
-  chainHits: ChainHit[];
-};
-
-const WORLD_WIDTH = 960;
-const WORLD_HEIGHT = 640;
-const CENTER: Vec2 = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
-const PLANET_RADIUS = 62;
-const ORBIT_RADIUS = 136;
-const OUTER_RADIUS = 500;
-const SATELLITE_RADIUS = 16;
+export type {
+  ChainHit,
+  HitSpark,
+  Meteor,
+  Punch,
+  SimulationEvents,
+  SimulationSnapshot,
+  ThreatKind,
+  Vec2
+} from "./types";
+export { world } from "./world";
 
 const PLAYER_ORBIT_SPEED = 1.95;
 const PUNCH_EXTEND_SPEED = 480;
@@ -91,54 +32,12 @@ const PUNCH_RANGE = 120;
 const PUNCH_HOLD_TIME = 0.24;
 const PUNCH_COOLDOWN = 0.56;
 const PUNCH_RETURN_EPSILON = 6;
-const METEOR_BASE_SPEED = 34;
-const PUNCH_KNOCK_SPEED = 280;
 const SATELLITE_KNOCK_SPEED = 250;
 const SATELLITE_HIT_LOCKOUT = 1.35;
-const CHAIN_KNOCK_SPEED = 238;
 const PUNCH_CHAIN_RADIUS = 9;
 const SPAWN_BASE_INTERVAL = 1.25;
-const ORBITAL_SATELLITE_RADIUS = 196;
-const TRACTOR_RANGE = 172;
-const TRACTOR_PULL = 38;
-const EXPLOSION_RADIUS = 118;
-const MINI_BOSS_HIT_COOLDOWN = 0.28;
 
 let nextId = 1;
-
-const distance = (a: Vec2, b: Vec2): number => Math.hypot(a.x - b.x, a.y - b.y);
-
-const radialPoint = (angle: number, radius: number): Vec2 => ({
-  x: CENTER.x + Math.cos(angle) * radius,
-  y: CENTER.y + Math.sin(angle) * radius
-});
-
-const normalize = (v: Vec2): Vec2 => {
-  const length = Math.hypot(v.x, v.y) || 1;
-  return { x: v.x / length, y: v.y / length };
-};
-
-const length = (v: Vec2): number => Math.hypot(v.x, v.y);
-
-const closestPointOnSegment = (point: Vec2, start: Vec2, end: Vec2): Vec2 => {
-  const segment = { x: end.x - start.x, y: end.y - start.y };
-  const segmentLengthSq = segment.x * segment.x + segment.y * segment.y;
-  if (segmentLengthSq <= 0.001) {
-    return { ...start };
-  }
-
-  const t = Math.max(
-    0,
-    Math.min(
-      1,
-      ((point.x - start.x) * segment.x + (point.y - start.y) * segment.y) / segmentLengthSq
-    )
-  );
-  return {
-    x: start.x + segment.x * t,
-    y: start.y + segment.y * t
-  };
-};
 
 export class OrbitPunchSimulation {
   private playerAngle = -Math.PI / 2;
@@ -194,7 +93,7 @@ export class OrbitPunchSimulation {
   }
 
   public update(dt: number): SimulationEvents {
-    const events = {
+    const events: SimulationEvents = {
       hit: false,
       satelliteHit: false,
       planetHit: false,
@@ -210,16 +109,23 @@ export class OrbitPunchSimulation {
     this.spawnTimer -= dt;
 
     if (this.spawnTimer <= 0) {
-      this.spawnThreat();
+      const spawned = spawnThreat({
+        wave: this.wave,
+        defeated: this.defeated,
+        miniBossWave: this.miniBossWave,
+        nextId: () => nextId++
+      });
+      this.meteors.push(spawned.threat);
+      this.miniBossWave = spawned.miniBossWave ?? this.miniBossWave;
       const pace = Math.max(0.48, SPAWN_BASE_INTERVAL - this.wave * 0.08);
       this.spawnTimer = pace + Math.random() * 0.45;
     }
 
     this.updatePunches(dt);
-    this.applyTractorPull(dt);
+    applyTractorPull(this.meteors, this.wave, dt);
 
     for (const meteor of this.meteors) {
-      this.updateThreat(meteor, dt);
+      updateThreat(meteor, dt);
       meteor.spin += dt * 4;
       meteor.hitCooldown = Math.max(0, (meteor.hitCooldown ?? 0) - dt);
     }
@@ -265,195 +171,6 @@ export class OrbitPunchSimulation {
       cooldownMax: this.cooldown > PUNCH_COOLDOWN ? SATELLITE_HIT_LOCKOUT : PUNCH_COOLDOWN,
       gameOver: this.gameOver
     };
-  }
-
-  private spawnThreat(): void {
-    const kind = this.pickThreatKind();
-    if (kind === "orbitalSatellite") {
-      this.spawnOrbitalSatellite();
-      return;
-    }
-    if (kind === "explosiveCore") {
-      this.spawnExplosiveCore();
-      return;
-    }
-    if (kind === "tractorDrone") {
-      this.spawnTractorDrone();
-      return;
-    }
-    if (kind === "miniBoss") {
-      this.spawnMiniBoss();
-      return;
-    }
-    this.spawnMeteor();
-  }
-
-  private pickThreatKind(): ThreatKind {
-    const roll = Math.random();
-    if (this.wave >= 5 && this.miniBossWave !== this.wave) {
-      return "miniBoss";
-    }
-    if (this.wave >= 4 && roll < 0.26) {
-      return "tractorDrone";
-    }
-    if (this.wave >= 3 && roll < 0.48) {
-      return "orbitalSatellite";
-    }
-    if (this.wave >= 2 && roll < 0.56) {
-      return "explosiveCore";
-    }
-    return "meteor";
-  }
-
-  private spawnMeteor(): void {
-    const angle = Math.random() * Math.PI * 2;
-    const spawn = radialPoint(angle, OUTER_RADIUS);
-    const inward = normalize({ x: CENTER.x - spawn.x, y: CENTER.y - spawn.y });
-    const speed = METEOR_BASE_SPEED + this.wave * 10 + Math.random() * 16;
-    this.meteors.push({
-      id: nextId++,
-      kind: "meteor",
-      pos: spawn,
-      vel: { x: inward.x * speed, y: inward.y * speed },
-      radius: 25 + Math.random() * 7,
-      alive: true,
-      knocked: false,
-      chain: 0,
-      spin: Math.random() * Math.PI * 2,
-      hp: 1,
-      maxHp: 1
-    });
-  }
-
-  private spawnExplosiveCore(): void {
-    const angle = Math.random() * Math.PI * 2;
-    const spawn = radialPoint(angle, OUTER_RADIUS);
-    const inward = normalize({ x: CENTER.x - spawn.x, y: CENTER.y - spawn.y });
-    const speed = METEOR_BASE_SPEED + this.wave * 8 + Math.random() * 12;
-    this.meteors.push({
-      id: nextId++,
-      kind: "explosiveCore",
-      pos: spawn,
-      vel: { x: inward.x * speed, y: inward.y * speed },
-      radius: 22,
-      alive: true,
-      knocked: false,
-      chain: 0,
-      spin: Math.random() * Math.PI * 2,
-      hp: 1,
-      maxHp: 1
-    });
-  }
-
-  private spawnTractorDrone(): void {
-    const angle = Math.random() * Math.PI * 2;
-    const spawn = radialPoint(angle, OUTER_RADIUS);
-    const inward = normalize({ x: CENTER.x - spawn.x, y: CENTER.y - spawn.y });
-    const speed = METEOR_BASE_SPEED * 0.74 + this.wave * 7 + Math.random() * 10;
-    this.meteors.push({
-      id: nextId++,
-      kind: "tractorDrone",
-      pos: spawn,
-      vel: { x: inward.x * speed, y: inward.y * speed },
-      radius: 23,
-      alive: true,
-      knocked: false,
-      chain: 0,
-      spin: Math.random() * Math.PI * 2,
-      hp: 1,
-      maxHp: 1
-    });
-  }
-
-  private spawnOrbitalSatellite(): void {
-    const angle = Math.random() * Math.PI * 2;
-    const spawn = radialPoint(angle, OUTER_RADIUS);
-    const inward = normalize({ x: CENTER.x - spawn.x, y: CENTER.y - spawn.y });
-    const speed = METEOR_BASE_SPEED + this.wave * 8 + Math.random() * 14;
-    this.meteors.push({
-      id: nextId++,
-      kind: "orbitalSatellite",
-      pos: spawn,
-      vel: { x: inward.x * speed, y: inward.y * speed },
-      radius: 20,
-      alive: true,
-      knocked: false,
-      chain: 0,
-      spin: Math.random() * Math.PI * 2,
-      hp: 1,
-      maxHp: 1,
-      orbitAngle: angle,
-      orbitRadius: ORBITAL_SATELLITE_RADIUS + Math.random() * 34,
-      orbitSpeed: (Math.random() < 0.5 ? -1 : 1) * (0.72 + this.wave * 0.04)
-    });
-  }
-
-  private spawnMiniBoss(): void {
-    this.miniBossWave = this.wave;
-    const angle = Math.random() * Math.PI * 2;
-    const spawn = radialPoint(angle, OUTER_RADIUS + 24);
-    const inward = normalize({ x: CENTER.x - spawn.x, y: CENTER.y - spawn.y });
-    const speed = METEOR_BASE_SPEED * 0.58 + this.wave * 4;
-    this.meteors.push({
-      id: nextId++,
-      kind: "miniBoss",
-      pos: spawn,
-      vel: { x: inward.x * speed, y: inward.y * speed },
-      radius: 42,
-      alive: true,
-      knocked: false,
-      chain: 0,
-      spin: Math.random() * Math.PI * 2,
-      hp: 4,
-      maxHp: 4,
-      hitCooldown: 0
-    });
-  }
-
-  private updateThreat(meteor: Meteor, dt: number): void {
-    if (
-      meteor.kind === "orbitalSatellite" &&
-      !meteor.knocked &&
-      meteor.orbitRadius !== undefined &&
-      meteor.orbitAngle !== undefined &&
-      meteor.orbitSpeed !== undefined &&
-      distance(meteor.pos, CENTER) <= meteor.orbitRadius
-    ) {
-      meteor.orbitAngle += meteor.orbitSpeed * dt;
-      meteor.pos = radialPoint(meteor.orbitAngle, meteor.orbitRadius);
-      meteor.vel = {
-        x: -Math.sin(meteor.orbitAngle) * meteor.orbitSpeed * meteor.orbitRadius,
-        y: Math.cos(meteor.orbitAngle) * meteor.orbitSpeed * meteor.orbitRadius
-      };
-      return;
-    }
-
-    meteor.pos.x += meteor.vel.x * dt;
-    meteor.pos.y += meteor.vel.y * dt;
-  }
-
-  private applyTractorPull(dt: number): void {
-    for (const drone of this.meteors) {
-      if (!drone.alive || drone.knocked || drone.kind !== "tractorDrone") {
-        continue;
-      }
-
-      for (const target of this.meteors) {
-        if (!target.alive || target.knocked || target === drone || target.kind === "miniBoss") {
-          continue;
-        }
-
-        const pullDistance = distance(drone.pos, target.pos);
-        if (pullDistance > TRACTOR_RANGE || pullDistance < 8) {
-          continue;
-        }
-
-        const direction = normalize({ x: drone.pos.x - target.pos.x, y: drone.pos.y - target.pos.y });
-        const strength = (1 - pullDistance / TRACTOR_RANGE) * (TRACTOR_PULL + this.wave * 3);
-        target.vel.x += direction.x * strength * dt;
-        target.vel.y += direction.y * strength * dt;
-      }
-    }
   }
 
   private updatePunches(dt: number): void {
@@ -535,7 +252,11 @@ export class OrbitPunchSimulation {
           x: meteor.pos.x - CENTER.x,
           y: meteor.pos.y - CENTER.y
         });
-        this.hitThreat(meteor, punch, length(contactDirection) > 0.001 ? contactDirection : fallbackDirection);
+        this.hitThreat(
+          meteor,
+          punch,
+          length(contactDirection) > 0.001 ? contactDirection : fallbackDirection
+        );
         punch.phase = "returning";
         events.hit = true;
       }
@@ -589,7 +310,7 @@ export class OrbitPunchSimulation {
 
         const explosive = this.pickExplosiveCore(first, second);
         if (explosive) {
-          this.explodeCore(explosive, events, Math.max(2, first.chain, second.chain));
+          this.applyExplosion(explosive, events, Math.max(2, first.chain, second.chain));
           events.hit = true;
           continue;
         }
@@ -609,7 +330,7 @@ export class OrbitPunchSimulation {
             CHAIN_KNOCK_SPEED + this.wave * 12,
             length(source.vel) * 0.82
           );
-          this.damageThreatByImpact(target, normal, transferredSpeed, 140, chainCount);
+          this.damageByImpact(target, normal, transferredSpeed, 140, chainCount);
           events.chainHits.push({
             pos: this.impactPoint(source, target, normal),
             count: chainCount
@@ -640,67 +361,35 @@ export class OrbitPunchSimulation {
     return undefined;
   }
 
-  private damageThreatByImpact(
+  private damageByImpact(
     meteor: Meteor,
     direction: Vec2,
     speed: number,
     scoreBonus: number,
     chain: number
   ): void {
-    if (meteor.kind !== "miniBoss") {
-      this.knockMeteor(meteor, direction, speed, scoreBonus, chain);
-      return;
-    }
-
-    meteor.hp -= 2;
-    meteor.hitCooldown = MINI_BOSS_HIT_COOLDOWN;
-    this.score += 95 + this.wave * 18 + scoreBonus;
-    this.sparks.push({ pos: { ...meteor.pos }, life: 0.24, maxLife: 0.24 });
-    if (meteor.hp <= 0) {
-      this.knockMeteor(meteor, direction, speed, 580, chain);
-    } else {
-      meteor.pos.x += direction.x * 12;
-      meteor.pos.y += direction.y * 12;
-      meteor.vel.x = direction.x * Math.max(95, speed * 0.35);
-      meteor.vel.y = direction.y * Math.max(95, speed * 0.35);
-    }
+    const state = this.effectState();
+    damageThreatByImpact(
+      meteor,
+      direction,
+      speed,
+      scoreBonus,
+      chain,
+      state,
+      (target, targetDirection, targetSpeed, targetScoreBonus, targetChain) =>
+        this.knockMeteor(target, targetDirection, targetSpeed, targetScoreBonus, targetChain)
+    );
+    this.applyEffectState(state);
   }
 
-  private explodeCore(core: Meteor, events: SimulationEvents, chain: number): void {
-    if (!core.alive) {
-      return;
-    }
-
-    core.alive = false;
-    this.defeated += 1;
-    this.score += 210 + this.wave * 22;
-    this.sparks.push({ pos: { ...core.pos }, life: 0.36, maxLife: 0.36 });
-
-    for (const target of this.meteors) {
-      if (!target.alive || target === core) {
-        continue;
-      }
-
-      const blastDistance = distance(core.pos, target.pos);
-      if (blastDistance > EXPLOSION_RADIUS + target.radius) {
-        continue;
-      }
-
-      const direction = normalize({ x: target.pos.x - core.pos.x, y: target.pos.y - core.pos.y });
-      const blastSpeed = PUNCH_KNOCK_SPEED + 70 + Math.max(0, EXPLOSION_RADIUS - blastDistance) * 0.7;
-      if (target.knocked) {
-        target.vel.x += direction.x * blastSpeed * 0.38;
-        target.vel.y += direction.y * blastSpeed * 0.38;
-      } else {
-        this.damageThreatByImpact(target, direction, blastSpeed, 240, chain + 1);
-      }
-      events.chainHits.push({
-        pos: { ...target.pos },
-        count: chain + 1
-      });
-    }
-
-    this.wave = 1 + Math.floor(this.defeated / 8);
+  private applyExplosion(core: Meteor, events: SimulationEvents, chain: number): void {
+    const state = this.effectState();
+    const result = explodeCore(core, this.meteors, events, chain, state, (...args) =>
+      damageThreatByImpact(...args, state, (...knockArgs) => this.knockMeteor(...knockArgs))
+    );
+    this.defeated = result.defeated;
+    this.score = result.score;
+    this.wave = result.wave;
   }
 
   private resolveSatelliteImpacts(events: SimulationEvents): void {
@@ -802,36 +491,29 @@ export class OrbitPunchSimulation {
       }
 
       if (meteor.kind === "explosiveCore") {
-        this.explodeCore(meteor, events, 1);
+        this.applyExplosion(meteor, events, 1);
         this.planetHp -= 32;
       } else {
         meteor.alive = false;
-        this.planetHp -= this.planetDamage(meteor);
+        this.planetHp -= planetDamage(meteor);
       }
       this.sparks.push({ pos: { ...meteor.pos }, life: 0.3, maxLife: 0.3 });
       events.planetHit = true;
     }
   }
 
-  private planetDamage(meteor: Meteor): number {
-    if (meteor.kind === "miniBoss") {
-      return 38;
-    }
-    if (meteor.kind === "tractorDrone") {
-      return 20;
-    }
-    if (meteor.kind === "orbitalSatellite") {
-      return 16;
-    }
-    return 18;
+  private effectState() {
+    return {
+      wave: this.wave,
+      defeated: this.defeated,
+      score: this.score,
+      sparks: this.sparks
+    };
+  }
+
+  private applyEffectState(state: ReturnType<OrbitPunchSimulation["effectState"]>): void {
+    this.defeated = state.defeated;
+    this.score = state.score;
+    this.wave = 1 + Math.floor(this.defeated / 8);
   }
 }
-
-export const world = {
-  width: WORLD_WIDTH,
-  height: WORLD_HEIGHT,
-  center: CENTER,
-  planetRadius: PLANET_RADIUS,
-  orbitRadius: ORBIT_RADIUS,
-  outerRadius: OUTER_RADIUS
-};

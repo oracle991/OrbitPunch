@@ -1,0 +1,77 @@
+export type Vec2 = {
+  x: number;
+  y: number;
+};
+
+export type ThreatKind =
+  | "meteor"
+  | "orbitalSatellite"
+  | "explosiveCore"
+  | "tractorDrone"
+  | "miniBoss";
+
+export type Meteor = {
+  id: number;
+  kind: ThreatKind;
+  pos: Vec2;
+  vel: Vec2;
+  radius: number;
+  alive: boolean;
+  knocked: boolean;
+  chain: number;
+  spin: number;
+  hp: number;
+  maxHp: number;
+  orbitAngle?: number;
+  orbitRadius?: number;
+  orbitSpeed?: number;
+  hitCooldown?: number;
+};
+
+export type Punch = {
+  id: number;
+  origin: Vec2;
+  pos: Vec2;
+  direction: Vec2;
+  radius: number;
+  distance: number;
+  maxDistance: number;
+  hold: number;
+  life: number;
+  maxLife: number;
+  phase: "extending" | "holding" | "returning";
+};
+
+export type HitSpark = {
+  pos: Vec2;
+  life: number;
+  maxLife: number;
+};
+
+export type ChainHit = {
+  pos: Vec2;
+  count: number;
+};
+
+export type SimulationSnapshot = {
+  playerAngle: number;
+  playerPos: Vec2;
+  meteors: Meteor[];
+  punches: Punch[];
+  sparks: HitSpark[];
+  score: number;
+  wave: number;
+  planetHp: number;
+  maxPlanetHp: number;
+  cooldown: number;
+  cooldownMax: number;
+  gameOver: boolean;
+};
+
+export type SimulationEvents = {
+  hit: boolean;
+  satelliteHit: boolean;
+  planetHit: boolean;
+  gameOver: boolean;
+  chainHits: ChainHit[];
+};
