@@ -1,0 +1,59 @@
+{
+  "notes": [
+    "Edit spawnWeights to tune which objects appear in each wave.",
+    "Weights are relative values: 0 disables a threat, larger numbers make it more likely.",
+    "When the game reaches a wave beyond this list, it loops these entries from the beginning."
+  ],
+  "waves": [
+    {
+      "wave": 1,
+      "spawnWeights": {
+        "meteor": 100,
+        "explosiveCore": 0,
+        "orbitalSatellite": 0,
+        "tractorDrone": 0,
+        "miniBoss": 0
+      }
+    },
+    {
+      "wave": 2,
+      "spawnWeights": {
+        "meteor": 44,
+        "explosiveCore": 56,
+        "orbitalSatellite": 0,
+        "tractorDrone": 0,
+        "miniBoss": 0
+      }
+    },
+    {
+      "wave": 3,
+      "spawnWeights": {
+        "meteor": 44,
+        "explosiveCore": 8,
+        "orbitalSatellite": 48,
+        "tractorDrone": 0,
+        "miniBoss": 0
+      }
+    },
+    {
+      "wave": 4,
+      "spawnWeights": {
+        "meteor": 44,
+        "explosiveCore": 8,
+        "orbitalSatellite": 22,
+        "tractorDrone": 26,
+        "miniBoss": 0
+      }
+    },
+    {
+      "wave": 5,
+      "spawnWeights": {
+        "meteor": 0,
+        "explosiveCore": 0,
+        "orbitalSatellite": 0,
+        "tractorDrone": 0,
+        "miniBoss": 100
+      }
+    }
+  ]
+}

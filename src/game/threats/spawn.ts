@@ -2,6 +2,7 @@ import { normalize, radialPoint } from "../math";
 import type { Meteor, ThreatKind } from "../types";
 import { CENTER, OUTER_RADIUS } from "../world";
 import { METEOR_BASE_SPEED, ORBITAL_SATELLITE_RADIUS } from "./config";
+import { pickWeightedThreatKind } from "./waveConfig";
 
 export type ThreatSpawnState = {
   wave: number;
@@ -16,20 +17,7 @@ export type ThreatSpawnResult = {
 };
 
 export const pickThreatKind = (wave: number, miniBossWave: number): ThreatKind => {
-  const roll = Math.random();
-  if (wave >= 5 && miniBossWave !== wave) {
-    return "miniBoss";
-  }
-  if (wave >= 4 && roll < 0.26) {
-    return "tractorDrone";
-  }
-  if (wave >= 3 && roll < 0.48) {
-    return "orbitalSatellite";
-  }
-  if (wave >= 2 && roll < 0.56) {
-    return "explosiveCore";
-  }
-  return "meteor";
+  return pickWeightedThreatKind(wave, miniBossWave !== wave);
 };
 
 export const spawnThreat = (state: ThreatSpawnState): ThreatSpawnResult => {
