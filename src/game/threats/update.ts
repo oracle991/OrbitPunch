@@ -1,7 +1,7 @@
-import { distance, normalize } from "../math";
+import { distance, length, normalize } from "../math";
 import type { Meteor } from "../types";
 import { CENTER } from "../world";
-import { TRACTOR_PULL, TRACTOR_RANGE } from "./config";
+import { TRACTOR_RANGE, TRACTOR_TURN_RATE } from "./config";
 
 export const updateThreat = (meteor: Meteor, dt: number): void => {
   if (
@@ -73,10 +73,33 @@ export const applyTractorPull = (meteors: Meteor[], wave: number, dt: number): v
         continue;
       }
 
-      const direction = normalize({ x: drone.pos.x - target.pos.x, y: drone.pos.y - target.pos.y });
-      const strength = (1 - pullDistance / TRACTOR_RANGE) * (TRACTOR_PULL + wave * 3);
-      target.vel.x += direction.x * strength * dt;
-      target.vel.y += direction.y * strength * dt;
+      bendThreatTowardPlanet(target, pullDistance, wave, dt);
     }
   }
+};
+
+const bendThreatTowardPlanet = (
+  target: Meteor,
+  tractorDistance: number,
+  wave: number,
+  dt: number
+): void => {
+  const speed = length(target.vel);
+  if (speed <= 0.001) {
+    return;
+  }
+
+  const current = normalize(target.vel);
+  const desired = normalize({ x: CENTER.x - target.pos.x, y: CENTER.y - target.pos.y });
+  const delta = Math.atan2(
+    current.x * desired.y - current.y * desired.x,
+    current.x * desired.x + current.y * desired.y
+  );
+  const rangeInfluence = 1 - tractorDistance / TRACTOR_RANGE;
+  const maxTurn = rangeInfluence * (TRACTOR_TURN_RATE + wave * 0.08) * dt;
+  const turn = Math.max(-maxTurn, Math.min(maxTurn, delta));
+  const cos = Math.cos(turn);
+  const sin = Math.sin(turn);
+  target.vel.x = (current.x * cos - current.y * sin) * speed;
+  target.vel.y = (current.x * sin + current.y * cos) * speed;
 };
