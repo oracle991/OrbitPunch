@@ -19,6 +19,14 @@ const palette = {
   playerCore: 0xffffff,
   meteor: 0xb4836a,
   meteorEdge: 0xffb36f,
+  orbitalSatellite: 0xaeb9c9,
+  orbitalPanel: 0x6bdff0,
+  explosiveCore: 0xff5b3f,
+  explosiveGlow: 0xffc25f,
+  tractorDrone: 0x8fe36b,
+  tractorBeam: 0xb8ff9f,
+  miniBoss: 0x8554d6,
+  miniBossCore: 0xfff0a8,
   punch: 0x8cf7ff,
   punchGlove: 0xffd56f,
   punchShadow: 0x1b5c78,
@@ -390,7 +398,30 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawMeteors(snapshot: SimulationSnapshot): void {
+    this.drawTractorLinks(snapshot);
+
     for (const meteor of snapshot.meteors) {
+      if (meteor.kind === "orbitalSatellite") {
+        this.drawOrbitalSatellite(meteor);
+        continue;
+      }
+      if (meteor.kind === "explosiveCore") {
+        this.drawExplosiveCore(meteor);
+        continue;
+      }
+      if (meteor.kind === "tractorDrone") {
+        this.drawTractorDrone(meteor);
+        continue;
+      }
+      if (meteor.kind === "miniBoss") {
+        this.drawMiniBoss(meteor);
+        continue;
+      }
+      this.drawMeteor(meteor);
+    }
+  }
+
+  private drawMeteor(meteor: SimulationSnapshot["meteors"][number]): void {
       const angle = Math.atan2(world.center.y - meteor.pos.y, world.center.x - meteor.pos.x);
       this.graphics.lineStyle(1, meteor.knocked ? palette.punch : palette.danger, 0.18);
       this.graphics.beginPath();
@@ -411,6 +442,148 @@ export class GameScene extends Phaser.Scene {
         meteor.pos.y + Math.sin(meteor.spin) * meteor.radius * 0.3,
         meteor.radius * 0.24
       );
+  }
+
+  private drawOrbitalSatellite(meteor: SimulationSnapshot["meteors"][number]): void {
+    const angle = meteor.spin;
+    const panelX = Math.cos(angle + Math.PI / 2);
+    const panelY = Math.sin(angle + Math.PI / 2);
+
+    this.graphics.lineStyle(1, meteor.knocked ? palette.punch : palette.orbitalPanel, 0.34);
+    this.graphics.strokeCircle(meteor.pos.x, meteor.pos.y, meteor.radius + 8);
+    this.graphics.fillStyle(meteor.knocked ? palette.punch : palette.orbitalSatellite, 1);
+    this.graphics.fillCircle(meteor.pos.x, meteor.pos.y, meteor.radius * 0.72);
+    this.graphics.fillStyle(palette.orbitalPanel, meteor.knocked ? 0.5 : 0.92);
+    this.fillRotatedEllipse(
+      meteor.pos.x + panelX * meteor.radius,
+      meteor.pos.y + panelY * meteor.radius,
+      meteor.radius * 1.2,
+      meteor.radius * 0.42,
+      angle
+    );
+    this.fillRotatedEllipse(
+      meteor.pos.x - panelX * meteor.radius,
+      meteor.pos.y - panelY * meteor.radius,
+      meteor.radius * 1.2,
+      meteor.radius * 0.42,
+      angle
+    );
+    this.graphics.fillStyle(0xffffff, 0.75);
+    this.graphics.fillCircle(meteor.pos.x, meteor.pos.y, meteor.radius * 0.28);
+  }
+
+  private drawExplosiveCore(meteor: SimulationSnapshot["meteors"][number]): void {
+    const pulse = 0.5 + Math.sin(meteor.spin * 2.4) * 0.5;
+    this.graphics.fillStyle(palette.explosiveGlow, 0.18 + pulse * 0.18);
+    this.graphics.fillCircle(meteor.pos.x, meteor.pos.y, meteor.radius + 13 + pulse * 5);
+    this.graphics.lineStyle(2, meteor.knocked ? palette.punch : palette.explosiveCore, 0.52);
+    this.graphics.strokeCircle(meteor.pos.x, meteor.pos.y, meteor.radius + 8);
+    this.graphics.fillStyle(meteor.knocked ? palette.punch : palette.explosiveCore, 1);
+    this.graphics.fillCircle(meteor.pos.x, meteor.pos.y, meteor.radius);
+    this.graphics.fillStyle(palette.explosiveGlow, 0.95);
+    this.graphics.fillCircle(meteor.pos.x, meteor.pos.y, meteor.radius * 0.45);
+
+    this.graphics.lineStyle(3, 0xffffff, 0.62);
+    for (let i = 0; i < 3; i += 1) {
+      const angle = meteor.spin + (i * Math.PI * 2) / 3;
+      this.graphics.beginPath();
+      this.graphics.moveTo(meteor.pos.x, meteor.pos.y);
+      this.graphics.lineTo(
+        meteor.pos.x + Math.cos(angle) * meteor.radius * 0.9,
+        meteor.pos.y + Math.sin(angle) * meteor.radius * 0.9
+      );
+      this.graphics.strokePath();
+    }
+  }
+
+  private drawTractorDrone(meteor: SimulationSnapshot["meteors"][number]): void {
+    this.graphics.lineStyle(2, meteor.knocked ? palette.punch : palette.tractorDrone, 0.45);
+    this.graphics.strokeCircle(meteor.pos.x, meteor.pos.y, meteor.radius + 6);
+    this.graphics.fillStyle(meteor.knocked ? palette.punch : palette.tractorDrone, 1);
+    this.fillRotatedEllipse(
+      meteor.pos.x,
+      meteor.pos.y,
+      meteor.radius * 1.55,
+      meteor.radius * 1.05,
+      meteor.spin
+    );
+    this.graphics.fillStyle(0x112814, 0.82);
+    this.graphics.fillCircle(meteor.pos.x, meteor.pos.y, meteor.radius * 0.42);
+    this.graphics.fillStyle(palette.tractorBeam, 0.95);
+    this.graphics.fillCircle(meteor.pos.x, meteor.pos.y, meteor.radius * 0.22);
+  }
+
+  private drawMiniBoss(meteor: SimulationSnapshot["meteors"][number]): void {
+    const hpRatio = Math.max(0, meteor.hp / meteor.maxHp);
+    this.graphics.fillStyle(palette.miniBoss, 0.18);
+    this.graphics.fillCircle(meteor.pos.x, meteor.pos.y, meteor.radius + 13);
+    this.graphics.lineStyle(3, palette.miniBoss, meteor.knocked ? 0.22 : 0.68);
+    this.graphics.strokeCircle(meteor.pos.x, meteor.pos.y, meteor.radius + 8);
+
+    this.graphics.fillStyle(meteor.knocked ? palette.punch : palette.miniBoss, 1);
+    this.fillRotatedEllipse(
+      meteor.pos.x,
+      meteor.pos.y,
+      meteor.radius * 1.9,
+      meteor.radius * 1.26,
+      meteor.spin * 0.45
+    );
+    this.graphics.fillStyle(palette.miniBossCore, 0.96);
+    this.graphics.fillCircle(meteor.pos.x, meteor.pos.y, meteor.radius * 0.42);
+
+    this.graphics.lineStyle(5, 0x25143f, 0.82);
+    this.graphics.beginPath();
+    this.graphics.arc(
+      meteor.pos.x,
+      meteor.pos.y,
+      meteor.radius + 15,
+      -Math.PI / 2,
+      Math.PI * 1.5
+    );
+    this.graphics.strokePath();
+
+    this.graphics.lineStyle(5, palette.miniBossCore, 0.95);
+    this.graphics.beginPath();
+    this.graphics.arc(
+      meteor.pos.x,
+      meteor.pos.y,
+      meteor.radius + 15,
+      -Math.PI / 2,
+      -Math.PI / 2 + Math.PI * 2 * hpRatio
+    );
+    this.graphics.strokePath();
+  }
+
+  private drawTractorLinks(snapshot: SimulationSnapshot): void {
+    const tractorRange = 172;
+    for (const drone of snapshot.meteors) {
+      if (!drone.alive || drone.knocked || drone.kind !== "tractorDrone") {
+        continue;
+      }
+
+      this.graphics.lineStyle(1, palette.tractorBeam, 0.12);
+      this.graphics.strokeCircle(drone.pos.x, drone.pos.y, tractorRange);
+
+      for (const target of snapshot.meteors) {
+        if (target === drone || !target.alive || target.knocked || target.kind === "miniBoss") {
+          continue;
+        }
+        const distanceToTarget = Phaser.Math.Distance.Between(
+          drone.pos.x,
+          drone.pos.y,
+          target.pos.x,
+          target.pos.y
+        );
+        if (distanceToTarget > tractorRange) {
+          continue;
+        }
+        const alpha = 0.34 * (1 - distanceToTarget / tractorRange);
+        this.graphics.lineStyle(2, palette.tractorBeam, alpha);
+        this.graphics.beginPath();
+        this.graphics.moveTo(drone.pos.x, drone.pos.y);
+        this.graphics.lineTo(target.pos.x, target.pos.y);
+        this.graphics.strokePath();
+      }
     }
   }
 
