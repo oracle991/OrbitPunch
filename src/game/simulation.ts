@@ -2,8 +2,13 @@ import { closestPointOnSegment, distance, length, normalize, radialPoint } from 
 import { damageThreatByImpact, explodeCore, planetDamage } from "./threats/effects";
 import { CHAIN_KNOCK_SPEED, MINI_BOSS_HIT_COOLDOWN, PUNCH_KNOCK_SPEED } from "./threats/config";
 import { applyTractorPull, updateThreat } from "./threats/update";
-import { spawnThreat } from "./threats/spawn";
-import { defeatBonusForThreat, rollSpawnIntervalForWave, scoreForThreat } from "./threats/waveConfig";
+import { spawnScheduledMiniBoss, spawnThreat } from "./threats/spawn";
+import {
+  defeatBonusForThreat,
+  hasMiniBossForWave,
+  rollSpawnIntervalForWave,
+  scoreForThreat
+} from "./threats/waveConfig";
 import type {
   HitSpark,
   Meteor,
@@ -39,6 +44,7 @@ const PUNCH_CHAIN_RADIUS = 9;
 const MAX_PLANET_HP = 100;
 const CHAIN_SHIELD_RECOVERY = 4;
 const MAX_CHAIN_SHIELD_RECOVERY = 12;
+const MINI_BOSS_ENTRY_DELAY = 10;
 
 let nextId = 1;
 
@@ -53,6 +59,8 @@ export class OrbitPunchSimulation {
   private wave = 1;
   private defeated = 0;
   private miniBossWave = 0;
+  private miniBossSpawnTimer = Number.POSITIVE_INFINITY;
+  private miniBossScheduledWave = 0;
   private planetHp = MAX_PLANET_HP;
   private gameOver = true;
 
@@ -67,6 +75,9 @@ export class OrbitPunchSimulation {
     this.wave = 1;
     this.defeated = 0;
     this.miniBossWave = 0;
+    this.miniBossSpawnTimer = Number.POSITIVE_INFINITY;
+    this.miniBossScheduledWave = 0;
+    this.scheduleMiniBossForCurrentWave();
     this.planetHp = MAX_PLANET_HP;
     this.gameOver = false;
   }
@@ -110,17 +121,28 @@ export class OrbitPunchSimulation {
     this.playerAngle += PLAYER_ORBIT_SPEED * dt;
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.spawnTimer -= dt;
+    this.miniBossSpawnTimer -= dt;
 
     if (this.spawnTimer <= 0) {
       const spawned = spawnThreat({
         wave: this.wave,
         defeated: this.defeated,
-        miniBossWave: this.miniBossWave,
         nextId: () => nextId++
       });
       this.meteors.push(spawned.threat);
-      this.miniBossWave = spawned.miniBossWave ?? this.miniBossWave;
       this.spawnTimer = rollSpawnIntervalForWave(this.wave);
+    }
+
+    if (this.miniBossSpawnTimer <= 0 && this.miniBossScheduledWave === this.wave) {
+      const spawned = spawnScheduledMiniBoss({
+        wave: this.wave,
+        defeated: this.defeated,
+        nextId: () => nextId++
+      });
+      this.meteors.push(spawned.threat);
+      this.miniBossWave = this.wave;
+      this.miniBossSpawnTimer = Number.POSITIVE_INFINITY;
+      this.miniBossScheduledWave = 0;
     }
 
     this.updatePunches(dt);
@@ -390,7 +412,7 @@ export class OrbitPunchSimulation {
     );
     this.defeated = result.defeated;
     this.score = result.score;
-    this.wave = result.wave;
+    this.updateWave(result.wave);
   }
 
   private resolveSatelliteImpacts(events: SimulationEvents): void {
@@ -478,7 +500,7 @@ export class OrbitPunchSimulation {
     this.deflectMeteor(meteor, direction, speed, chain);
     this.defeated += 1;
     this.score += scoreForThreat(meteor.kind, this.wave, scoreBonus);
-    this.wave = 1 + Math.floor(this.defeated / 8);
+    this.updateWaveFromDefeated();
   }
 
   private damageMiniBoss(
@@ -510,7 +532,7 @@ export class OrbitPunchSimulation {
       this.wave,
       scoreBonus + defeatBonusForThreat(meteor.kind, this.wave)
     );
-    this.wave = 1 + Math.floor(this.defeated / 8);
+    this.updateWaveFromDefeated();
     this.sparks.push({ pos: { ...meteor.pos }, life: 0.3, maxLife: 0.3 });
   }
 
@@ -567,6 +589,30 @@ export class OrbitPunchSimulation {
   private applyEffectState(state: ReturnType<OrbitPunchSimulation["effectState"]>): void {
     this.defeated = state.defeated;
     this.score = state.score;
-    this.wave = 1 + Math.floor(this.defeated / 8);
+    this.updateWaveFromDefeated();
+  }
+
+  private updateWaveFromDefeated(): void {
+    this.updateWave(1 + Math.floor(this.defeated / 8));
+  }
+
+  private updateWave(nextWave: number): void {
+    if (nextWave === this.wave) {
+      return;
+    }
+
+    this.wave = nextWave;
+    this.scheduleMiniBossForCurrentWave();
+  }
+
+  private scheduleMiniBossForCurrentWave(): void {
+    if (!hasMiniBossForWave(this.wave) || this.miniBossWave === this.wave) {
+      this.miniBossSpawnTimer = Number.POSITIVE_INFINITY;
+      this.miniBossScheduledWave = 0;
+      return;
+    }
+
+    this.miniBossSpawnTimer = MINI_BOSS_ENTRY_DELAY;
+    this.miniBossScheduledWave = this.wave;
   }
 }

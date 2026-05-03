@@ -6,21 +6,19 @@ import { pickWeightedThreatKind, rollThreatSpawnConfig } from "./waveConfig";
 export type ThreatSpawnState = {
   wave: number;
   defeated: number;
-  miniBossWave: number;
   nextId: () => number;
 };
 
 export type ThreatSpawnResult = {
   threat: Meteor;
-  miniBossWave?: number;
 };
 
-export const pickThreatKind = (wave: number, miniBossWave: number): ThreatKind => {
-  return pickWeightedThreatKind(wave, miniBossWave !== wave);
+export const pickThreatKind = (wave: number): ThreatKind => {
+  return pickWeightedThreatKind(wave, false);
 };
 
 export const spawnThreat = (state: ThreatSpawnState): ThreatSpawnResult => {
-  const kind = pickThreatKind(state.wave, state.miniBossWave);
+  const kind = pickThreatKind(state.wave);
   if (kind === "orbitalSatellite") {
     return { threat: spawnOrbitalSatellite(state) };
   }
@@ -30,11 +28,12 @@ export const spawnThreat = (state: ThreatSpawnState): ThreatSpawnResult => {
   if (kind === "tractorDrone") {
     return { threat: spawnTractorDrone(state) };
   }
-  if (kind === "miniBoss") {
-    return { threat: spawnMiniBoss(state), miniBossWave: state.wave };
-  }
   return { threat: spawnMeteor(state) };
 };
+
+export const spawnScheduledMiniBoss = (state: ThreatSpawnState): ThreatSpawnResult => ({
+  threat: spawnMiniBoss(state)
+});
 
 const spawnMeteor = (state: ThreatSpawnState): Meteor => {
   const params = rollThreatSpawnConfig("meteor", state.wave);

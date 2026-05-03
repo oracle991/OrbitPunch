@@ -2,6 +2,7 @@
   "notes": [
     "Edit spawnWeights to tune which objects appear in each wave.",
     "Weights are relative values: 0 disables a threat, larger numbers make it more likely.",
+    "miniBoss is special: a value above 0 schedules one mini boss 10 seconds after entering that wave, instead of adding it to random spawn rolls.",
     "Edit threatParams to tune score, radius, inbound speed, entry angle randomness, and per-wave growth.",
     "Each numeric range uses base + currentWave * wave + random(0, random), then wave modifiers are applied.",
     "spawnAngle.spreadDegrees controls where objects enter from. 360 means all around the screen.",

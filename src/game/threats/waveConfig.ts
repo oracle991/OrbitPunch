@@ -303,6 +303,9 @@ export const pickWeightedThreatKind = (
   return "meteor";
 };
 
+export const hasMiniBossForWave = (wave: number): boolean =>
+  getThreatWeightsForWave(wave).miniBoss > 0;
+
 export const rollThreatSpawnConfig = (kind: ThreatKind, wave: number) => {
   const params = threatParams[kind];
   const modifiers = getWaveConfigForWave(wave).modifiers;
