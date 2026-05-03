@@ -35,9 +35,8 @@ button {
 
 #game-shell {
   position: relative;
-  width: min(100vw - 36px, 1120px);
-  height: min(100vh - 36px, 760px);
-  min-height: 520px;
+  width: min(100vw - 36px, 100vh - 36px, 960px);
+  aspect-ratio: 1;
   overflow: hidden;
   border: 1px solid rgba(187, 235, 255, 0.24);
   border-radius: 8px;
@@ -136,8 +135,10 @@ button {
 }
 
 .panel.upgrade-panel {
-  width: min(900px, calc(100vw - 48px));
-  padding: clamp(22px, 4vw, 34px);
+  width: min(100%, 860px);
+  max-height: 100%;
+  overflow: auto;
+  padding: clamp(20px, 3.4vw, 30px);
 }
 
 .kicker {
@@ -176,7 +177,7 @@ h1 {
 .upgrade-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: clamp(10px, 1.7vw, 14px);
 }
 
 .upgrade-grid-single {
@@ -186,10 +187,10 @@ h1 {
 
 .upgrade-choice {
   display: grid;
-  grid-template-rows: minmax(150px, 1fr) auto minmax(58px, auto);
-  min-height: clamp(280px, 44vh, 360px);
+  grid-template-rows: minmax(118px, 1fr) auto minmax(58px, auto);
+  min-height: clamp(250px, 38vh, 328px);
   width: 100%;
-  gap: 12px;
+  gap: 10px;
   align-content: stretch;
   border: 1px solid rgba(197, 239, 255, 0.28);
   border-radius: 8px;
@@ -215,7 +216,8 @@ h1 {
 }
 
 .upgrade-choice span {
-  font-size: 17px;
+  overflow-wrap: anywhere;
+  font-size: clamp(13px, 1.6vw, 17px);
   line-height: 1;
 }
 
@@ -233,7 +235,7 @@ h1 {
 
 .upgrade-name {
   display: grid;
-  min-height: 42px;
+  min-height: 38px;
   place-items: center;
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.22);
@@ -245,7 +247,7 @@ h1 {
   display: block;
   min-height: 58px;
   color: #d5eef8;
-  font-size: 13px;
+  font-size: clamp(12px, 1.3vw, 13px);
   font-weight: 700;
   line-height: 1.45;
   text-align: left;
@@ -257,9 +259,7 @@ h1 {
   }
 
   #game-shell {
-    width: 100vw;
-    height: 100vh;
-    min-height: 480px;
+    width: min(100vw, 100vh);
     border: 0;
     border-radius: 0;
   }
@@ -278,8 +278,8 @@ h1 {
 
   .panel.upgrade-panel {
     width: min(100%, 520px);
-    max-height: calc(100vh - 32px);
-    overflow: auto;
+    max-height: 100%;
+    padding: 18px;
   }
 
   .upgrade-grid {

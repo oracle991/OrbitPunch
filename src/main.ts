@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import "./styles.css";
 import { GameScene } from "./game/GameScene";
+import { WORLD_HEIGHT, WORLD_WIDTH } from "./game/world";
 
 const getElement = <T extends HTMLElement>(id: string): T => {
   const element = document.getElementById(id);
@@ -13,14 +14,14 @@ const getElement = <T extends HTMLElement>(id: string): T => {
 new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game-root",
-  width: 960,
-  height: 640,
+  width: WORLD_WIDTH,
+  height: WORLD_HEIGHT,
   backgroundColor: "#07121a",
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: 960,
-    height: 640
+    width: WORLD_WIDTH,
+    height: WORLD_HEIGHT
   },
   render: {
     antialias: true,

@@ -1,7 +1,7 @@
 import type { Vec2 } from "./types";
 
-const WORLD_WIDTH = 960;
-const WORLD_HEIGHT = 640;
+export const WORLD_WIDTH = 960;
+export const WORLD_HEIGHT = 960;
 
 export const CENTER: Vec2 = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
 export const PLANET_RADIUS = 62;
