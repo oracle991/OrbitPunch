@@ -6,6 +6,7 @@
     "Each numeric range uses base + currentWave * wave + random(0, random), then wave modifiers are applied.",
     "spawnAngle.spreadDegrees controls where objects enter from. 360 means all around the screen.",
     "aimRadius controls inbound angle randomness: larger values let objects aim farther away from the planet center.",
+    "spawnInterval controls total object volume. Smaller base/random values spawn more objects.",
     "When the game reaches a wave beyond this list, it loops these entries from the beginning."
   ],
   "threatParams": {
@@ -61,12 +62,13 @@
         "radius": 1,
         "speed": 1,
         "aimRadius": 1,
-        "spawnAngleSpread": 1
+        "spawnAngleSpread": 1,
+        "spawnInterval": { "base": 1.17, "random": 0.45 }
       },
       "spawnWeights": {
         "meteor": 100,
         "explosiveCore": 0,
-        "orbitalSatellite": 0,
+        "orbitalSatellite": 50,
         "tractorDrone": 0,
         "miniBoss": 0
       }
@@ -78,7 +80,8 @@
         "radius": 1,
         "speed": 1.04,
         "aimRadius": 1.08,
-        "spawnAngleSpread": 1
+        "spawnAngleSpread": 1,
+        "spawnInterval": { "base": 1.09, "random": 0.45 }
       },
       "spawnWeights": {
         "meteor": 44,
@@ -95,7 +98,8 @@
         "radius": 1.02,
         "speed": 1.06,
         "aimRadius": 1.12,
-        "spawnAngleSpread": 1
+        "spawnAngleSpread": 1,
+        "spawnInterval": { "base": 1.01, "random": 0.45 }
       },
       "spawnWeights": {
         "meteor": 44,
@@ -112,7 +116,8 @@
         "radius": 1.04,
         "speed": 1.08,
         "aimRadius": 1.16,
-        "spawnAngleSpread": 1
+        "spawnAngleSpread": 1,
+        "spawnInterval": { "base": 0.93, "random": 0.45 }
       },
       "spawnWeights": {
         "meteor": 44,
@@ -129,7 +134,8 @@
         "radius": 1,
         "speed": 1,
         "aimRadius": 1,
-        "spawnAngleSpread": 1
+        "spawnAngleSpread": 1,
+        "spawnInterval": { "base": 0.85, "random": 0.45 }
       },
       "spawnWeights": {
         "meteor": 0,

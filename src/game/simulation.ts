@@ -3,7 +3,7 @@ import { damageThreatByImpact, explodeCore, planetDamage } from "./threats/effec
 import { CHAIN_KNOCK_SPEED, MINI_BOSS_HIT_COOLDOWN, PUNCH_KNOCK_SPEED } from "./threats/config";
 import { applyTractorPull, updateThreat } from "./threats/update";
 import { spawnThreat } from "./threats/spawn";
-import { defeatBonusForThreat, scoreForThreat } from "./threats/waveConfig";
+import { defeatBonusForThreat, rollSpawnIntervalForWave, scoreForThreat } from "./threats/waveConfig";
 import type {
   HitSpark,
   Meteor,
@@ -36,7 +36,6 @@ const PUNCH_RETURN_EPSILON = 6;
 const SATELLITE_KNOCK_SPEED = 250;
 const SATELLITE_HIT_LOCKOUT = 1.35;
 const PUNCH_CHAIN_RADIUS = 9;
-const SPAWN_BASE_INTERVAL = 1.25;
 const MAX_PLANET_HP = 100;
 const CHAIN_SHIELD_RECOVERY = 4;
 const MAX_CHAIN_SHIELD_RECOVERY = 12;
@@ -121,8 +120,7 @@ export class OrbitPunchSimulation {
       });
       this.meteors.push(spawned.threat);
       this.miniBossWave = spawned.miniBossWave ?? this.miniBossWave;
-      const pace = Math.max(0.48, SPAWN_BASE_INTERVAL - this.wave * 0.08);
-      this.spawnTimer = pace + Math.random() * 0.45;
+      this.spawnTimer = rollSpawnIntervalForWave(this.wave);
     }
 
     this.updatePunches(dt);

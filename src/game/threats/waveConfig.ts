@@ -38,6 +38,7 @@ type WaveModifiers = {
   speed: number;
   aimRadius: number;
   spawnAngleSpread: number;
+  spawnInterval: NumericRange;
 };
 
 type WaveThreatConfig = {
@@ -62,7 +63,8 @@ const FALLBACK_WAVES: WaveThreatConfig[] = [
       radius: 1,
       speed: 1,
       aimRadius: 1,
-      spawnAngleSpread: 1
+      spawnAngleSpread: 1,
+      spawnInterval: { base: 1.17, wave: 0, random: 0.45 }
     },
     spawnWeights: {
       meteor: 100,
@@ -213,7 +215,8 @@ const normalizeWaveModifiers = (config: unknown): WaveModifiers => {
     radius: sanitizePositiveMultiplier(item?.radius),
     speed: sanitizePositiveMultiplier(item?.speed),
     aimRadius: sanitizePositiveMultiplier(item?.aimRadius),
-    spawnAngleSpread: sanitizePositiveMultiplier(item?.spawnAngleSpread)
+    spawnAngleSpread: sanitizePositiveMultiplier(item?.spawnAngleSpread),
+    spawnInterval: sanitizeRange(item?.spawnInterval, FALLBACK_WAVES[0].modifiers.spawnInterval)
   };
 };
 
@@ -329,4 +332,9 @@ export const scoreForThreat = (kind: ThreatKind, wave: number, extraBonus = 0): 
 export const defeatBonusForThreat = (kind: ThreatKind, wave: number): number => {
   const modifier = getWaveConfigForWave(wave).modifiers.score;
   return Math.round(threatParams[kind].score.defeatBonus * modifier);
+};
+
+export const rollSpawnIntervalForWave = (wave: number): number => {
+  const interval = getWaveConfigForWave(wave).modifiers.spawnInterval;
+  return Math.max(0.1, rollRange(interval, 0));
 };
