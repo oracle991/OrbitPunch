@@ -1,7 +1,12 @@
 import { distance, length, normalize } from "../math";
 import type { Meteor } from "../types";
 import { CENTER } from "../world";
-import { TRACTOR_RANGE, TRACTOR_TURN_RATE } from "./config";
+import {
+  TRACTOR_KNOCKED_PULL_ACCELERATION,
+  TRACTOR_KNOCKED_PULL_RANGE,
+  TRACTOR_RANGE,
+  TRACTOR_TURN_RATE
+} from "./config";
 
 export const updateThreat = (meteor: Meteor, dt: number): void => {
   if (
@@ -105,16 +110,25 @@ export const applyTractorPull = (meteors: Meteor[], wave: number, dt: number): v
     }
 
     for (const target of meteors) {
-      if (!target.alive || target.knocked || target === drone || target.kind === "miniBoss") {
+      if (!target.alive || target === drone || target.kind === "miniBoss") {
         continue;
       }
 
       const pullDistance = distance(drone.pos, target.pos);
-      if (pullDistance > TRACTOR_RANGE || pullDistance < 8) {
+      if (pullDistance < 8) {
         continue;
       }
 
-      bendThreatTowardPlanet(target, pullDistance, wave, dt);
+      if (target.knocked) {
+        if (pullDistance <= TRACTOR_KNOCKED_PULL_RANGE) {
+          pullKnockedThreatTowardDrone(target, drone, pullDistance, wave, dt);
+        }
+        continue;
+      }
+
+      if (pullDistance <= TRACTOR_RANGE) {
+        bendThreatTowardPlanet(target, pullDistance, wave, dt);
+      }
     }
   }
 };
@@ -143,4 +157,22 @@ const bendThreatTowardPlanet = (
   const sin = Math.sin(turn);
   target.vel.x = (current.x * cos - current.y * sin) * speed;
   target.vel.y = (current.x * sin + current.y * cos) * speed;
+};
+
+const pullKnockedThreatTowardDrone = (
+  target: Meteor,
+  drone: Meteor,
+  tractorDistance: number,
+  wave: number,
+  dt: number
+): void => {
+  const direction = normalize({
+    x: drone.pos.x - target.pos.x,
+    y: drone.pos.y - target.pos.y
+  });
+  const rangeInfluence = 1 - tractorDistance / TRACTOR_KNOCKED_PULL_RANGE;
+  const acceleration =
+    (TRACTOR_KNOCKED_PULL_ACCELERATION + wave * 24) * (0.32 + rangeInfluence * 0.68);
+  target.vel.x += direction.x * acceleration * dt;
+  target.vel.y += direction.y * acceleration * dt;
 };
