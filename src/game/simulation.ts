@@ -53,6 +53,7 @@ export class OrbitPunchSimulation {
   private meteors: Meteor[] = [];
   private punches: Punch[] = [];
   private sparks: HitSpark[] = [];
+  private chainTreeSizes = new Map<number, number>();
   private spawnTimer = 0.85;
   private cooldown = 0;
   private score = 0;
@@ -69,6 +70,7 @@ export class OrbitPunchSimulation {
     this.meteors = [];
     this.punches = [];
     this.sparks = [];
+    this.chainTreeSizes = new Map();
     this.spawnTimer = 0.55;
     this.cooldown = 0;
     this.score = 0;
@@ -339,12 +341,12 @@ export class OrbitPunchSimulation {
         }
 
         if (!target.knocked) {
-          const chainCount = Math.max(1, source.chain) + 1;
+          const { chainCount, rootId } = this.extendChainTree(source);
           const transferredSpeed = Math.max(
             CHAIN_KNOCK_SPEED + this.wave * 12,
             length(source.vel) * 0.82
           );
-          this.damageByImpact(target, normal, transferredSpeed, 140, chainCount);
+          this.damageByImpact(target, normal, transferredSpeed, 140, chainCount, rootId);
           const shieldRecovery = this.recoverPlanetShield(chainCount);
           events.chainHits.push({
             pos: this.impactPoint(source, target, normal),
@@ -382,7 +384,8 @@ export class OrbitPunchSimulation {
     direction: Vec2,
     speed: number,
     scoreBonus: number,
-    chain: number
+    chain: number,
+    chainRootId?: number
   ): void {
     const state = this.effectState();
     damageThreatByImpact(
@@ -393,22 +396,43 @@ export class OrbitPunchSimulation {
       chain,
       state,
       (target, targetDirection, targetSpeed, targetScoreBonus, targetChain) =>
-        this.knockMeteor(target, targetDirection, targetSpeed, targetScoreBonus, targetChain)
+        this.knockMeteor(
+          target,
+          targetDirection,
+          targetSpeed,
+          targetScoreBonus,
+          targetChain,
+          chainRootId
+        )
     );
     this.applyEffectState(state);
   }
 
   private applyExplosion(core: Meteor, events: SimulationEvents, chain: number): void {
     const state = this.effectState();
+    const rootId = core.knocked ? this.chainRootIdFor(core) : core.id;
+    this.chainTreeSizes.set(rootId, Math.max(this.chainTreeSizeForRoot(rootId), chain));
     const result = explodeCore(
       core,
       this.meteors,
       events,
       chain,
       state,
-      (...args) =>
-        damageThreatByImpact(...args, state, (...knockArgs) => this.knockMeteor(...knockArgs)),
-      (chainCount) => this.recoverPlanetShield(chainCount)
+      (target, direction, speed, scoreBonus, chainCount, chainRootId) =>
+        damageThreatByImpact(
+          target,
+          direction,
+          speed,
+          scoreBonus,
+          chainCount,
+          state,
+          (...knockArgs) => this.knockMeteor(...knockArgs, chainRootId)
+        ),
+      (chainCount) => this.recoverPlanetShield(chainCount),
+      () => {
+        const chainCount = this.extendChainTreeFromRoot(rootId, chain);
+        return { chainCount, rootId };
+      }
     );
     this.defeated = result.defeated;
     this.score = result.score;
@@ -495,9 +519,10 @@ export class OrbitPunchSimulation {
     direction: Vec2,
     speed: number,
     scoreBonus = 0,
-    chain = 1
+    chain = 1,
+    chainRootId = meteor.id
   ): void {
-    this.deflectMeteor(meteor, direction, speed, chain);
+    this.deflectMeteor(meteor, direction, speed, chain, chainRootId);
     this.defeated += 1;
     this.score += scoreForThreat(meteor.kind, this.wave, scoreBonus);
     this.updateWaveFromDefeated();
@@ -536,12 +561,45 @@ export class OrbitPunchSimulation {
     this.sparks.push({ pos: { ...meteor.pos }, life: 0.3, maxLife: 0.3 });
   }
 
-  private deflectMeteor(meteor: Meteor, direction: Vec2, speed: number, chain = 1): void {
+  private deflectMeteor(
+    meteor: Meteor,
+    direction: Vec2,
+    speed: number,
+    chain = 1,
+    chainRootId = meteor.id
+  ): void {
     meteor.vel.x = direction.x * speed;
     meteor.vel.y = direction.y * speed;
     meteor.knocked = true;
     meteor.chain = chain;
+    meteor.chainRootId = chainRootId;
+    this.chainTreeSizes.set(chainRootId, Math.max(this.chainTreeSizeForRoot(chainRootId), chain));
     this.sparks.push({ pos: { ...meteor.pos }, life: 0.22, maxLife: 0.22 });
+  }
+
+  private chainRootIdFor(meteor: Meteor): number {
+    return meteor.chainRootId ?? meteor.id;
+  }
+
+  private chainTreeSizeForRoot(rootId: number): number {
+    return this.chainTreeSizes.get(rootId) ?? 0;
+  }
+
+  private chainTreeSizeFor(meteor: Meteor): number {
+    return Math.max(1, meteor.chain, this.chainTreeSizeForRoot(this.chainRootIdFor(meteor)));
+  }
+
+  private extendChainTree(source: Meteor): { chainCount: number; rootId: number } {
+    const rootId = this.chainRootIdFor(source);
+    const chainCount = this.chainTreeSizeFor(source) + 1;
+    this.chainTreeSizes.set(rootId, chainCount);
+    return { chainCount, rootId };
+  }
+
+  private extendChainTreeFromRoot(rootId: number, minimumChainSize: number): number {
+    const chainCount = Math.max(this.chainTreeSizeForRoot(rootId), minimumChainSize) + 1;
+    this.chainTreeSizes.set(rootId, chainCount);
+    return chainCount;
   }
 
   private recoverPlanetShield(chain: number): number {

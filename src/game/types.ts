@@ -19,6 +19,7 @@ export type Meteor = {
   alive: boolean;
   knocked: boolean;
   chain: number;
+  chainRootId?: number;
   spin: number;
   hp: number;
   maxHp: number;

@@ -16,6 +16,11 @@ export type ThreatEffectResult = {
   wave: number;
 };
 
+export type ChainAllocation = {
+  chainCount: number;
+  rootId?: number;
+};
+
 export const planetDamage = (meteor: Meteor): number => {
   if (meteor.kind === "miniBoss") {
     return 38;
@@ -76,9 +81,11 @@ export const explodeCore = (
     direction: Vec2,
     speed: number,
     scoreBonus: number,
-    chain: number
+    chain: number,
+    chainRootId?: number
   ) => void,
-  recoverShield: (chain: number) => number = () => 0
+  recoverShield: (chain: number) => number = () => 0,
+  allocateChain: () => ChainAllocation = () => ({ chainCount: chain + 1 })
 ): ThreatEffectResult => {
   if (!core.alive) {
     return finish(state);
@@ -101,13 +108,16 @@ export const explodeCore = (
 
     const direction = normalize({ x: target.pos.x - core.pos.x, y: target.pos.y - core.pos.y });
     const blastSpeed = PUNCH_KNOCK_SPEED + 70 + Math.max(0, EXPLOSION_RADIUS - blastDistance) * 0.7;
-    const nextChain = chain + 1;
+    let nextChain = chain + 1;
     let shieldRecovery = 0;
     if (target.knocked) {
       target.vel.x += direction.x * blastSpeed * 0.38;
       target.vel.y += direction.y * blastSpeed * 0.38;
+      nextChain = Math.max(nextChain, target.chain);
     } else {
-      damageByImpact(target, direction, blastSpeed, 240, nextChain);
+      const allocation = allocateChain();
+      nextChain = allocation.chainCount;
+      damageByImpact(target, direction, blastSpeed, 240, nextChain, allocation.rootId);
       shieldRecovery = recoverShield(nextChain);
     }
     events.chainHits.push({
