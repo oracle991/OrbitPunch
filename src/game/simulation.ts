@@ -46,6 +46,7 @@ import { CENTER, ORBIT_RADIUS, OUTER_RADIUS, PLANET_RADIUS, SATELLITE_RADIUS } f
 
 export type {
   ChainHit,
+  ExplosionBlast,
   HitSpark,
   Meteor,
   Punch,
@@ -290,7 +291,8 @@ export class OrbitPunchSimulation {
       satelliteHit: false,
       planetHit: false,
       gameOver: false,
-      chainHits: []
+      chainHits: [],
+      explosions: []
     };
     if (this.gameOver) {
       return events;

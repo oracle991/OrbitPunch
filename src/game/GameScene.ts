@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import {
   OrbitPunchSimulation,
   type ChainHit,
+  type ExplosionBlast,
   type SimulationSnapshot,
   type UpgradeChoice,
   type UpgradeId
@@ -85,6 +86,13 @@ type BackgroundStar = {
   alpha: number;
 };
 
+type ActiveExplosionRing = ExplosionBlast & {
+  life: number;
+  maxLife: number;
+};
+
+const EXPLOSION_RING_LIFE = 0.54;
+
 export class GameScene extends Phaser.Scene {
   private readonly sim = new OrbitPunchSimulation();
   private readonly hud: HudElements;
@@ -99,6 +107,7 @@ export class GameScene extends Phaser.Scene {
   private shakeTime = 0;
   private hitStop = 0;
   private hitLabels: Phaser.GameObjects.Text[] = [];
+  private explosionRings: ActiveExplosionRing[] = [];
   private overlayAction: (() => void) | undefined;
 
   public constructor(hud: HudElements) {
@@ -188,6 +197,9 @@ export class GameScene extends Phaser.Scene {
     for (const chainHit of events.chainHits) {
       this.spawnHitLabel(chainHit);
     }
+    for (const explosion of events.explosions) {
+      this.spawnExplosionRing(explosion);
+    }
     if (events.hit) {
       this.hitStop = 0.035;
       this.shakeTime = 0.16;
@@ -222,6 +234,7 @@ export class GameScene extends Phaser.Scene {
       label.destroy();
     }
     this.hitLabels = [];
+    this.explosionRings = [];
     this.cameras.main.setScroll(0, 0);
     this.hideOverlay();
   }
@@ -474,6 +487,15 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  private spawnExplosionRing(explosion: ExplosionBlast): void {
+    this.explosionRings.push({
+      pos: { ...explosion.pos },
+      radius: explosion.radius,
+      life: EXPLOSION_RING_LIFE,
+      maxLife: EXPLOSION_RING_LIFE
+    });
+  }
+
   private render(snapshot: SimulationSnapshot, dt: number): void {
     this.updateHud(snapshot);
     this.updateCamera(dt);
@@ -485,6 +507,7 @@ export class GameScene extends Phaser.Scene {
     this.drawPlanet(snapshot);
     this.drawPunches(snapshot);
     this.drawThreats(snapshot);
+    this.drawExplosionRings(dt);
     this.drawPlayer(snapshot);
     this.drawSparks(snapshot);
   }
@@ -850,6 +873,48 @@ export class GameScene extends Phaser.Scene {
     for (const image of pool) {
       image.setVisible(false);
     }
+  }
+
+  private drawExplosionRings(dt: number): void {
+    for (const ring of this.explosionRings) {
+      const progress = 1 - ring.life / ring.maxLife;
+      const alpha = Phaser.Math.Clamp(ring.life / ring.maxLife, 0, 1);
+      const shockRadius = Phaser.Math.Linear(ring.radius * 0.18, ring.radius, progress);
+      const boundaryAlpha = 0.18 + alpha * 0.46;
+
+      this.graphics.fillStyle(palette.explosiveGlow, 0.05 * alpha);
+      this.graphics.fillCircle(ring.pos.x, ring.pos.y, ring.radius);
+
+      this.overlayGraphics.lineStyle(5, palette.explosiveCore, boundaryAlpha);
+      this.overlayGraphics.strokeCircle(ring.pos.x, ring.pos.y, ring.radius);
+      this.overlayGraphics.lineStyle(2, 0xffffff, 0.24 * alpha);
+      this.overlayGraphics.strokeCircle(ring.pos.x, ring.pos.y, ring.radius + 3);
+
+      this.overlayGraphics.lineStyle(3, palette.explosiveGlow, 0.62 * alpha);
+      this.overlayGraphics.strokeCircle(ring.pos.x, ring.pos.y, shockRadius);
+
+      const tickLength = 12;
+      this.overlayGraphics.lineStyle(3, 0xffffff, 0.28 * alpha);
+      for (let i = 0; i < 8; i += 1) {
+        const angle = (i * Math.PI * 2) / 8;
+        const innerRadius = ring.radius - tickLength;
+        const outerRadius = ring.radius + tickLength * 0.35;
+        this.overlayGraphics.beginPath();
+        this.overlayGraphics.moveTo(
+          ring.pos.x + Math.cos(angle) * innerRadius,
+          ring.pos.y + Math.sin(angle) * innerRadius
+        );
+        this.overlayGraphics.lineTo(
+          ring.pos.x + Math.cos(angle) * outerRadius,
+          ring.pos.y + Math.sin(angle) * outerRadius
+        );
+        this.overlayGraphics.strokePath();
+      }
+
+      ring.life -= dt;
+    }
+
+    this.explosionRings = this.explosionRings.filter((ring) => ring.life > 0);
   }
 
   private drawSparks(snapshot: SimulationSnapshot): void {

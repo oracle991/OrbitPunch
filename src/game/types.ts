@@ -75,6 +75,11 @@ export type ChainHit = {
   shieldRecovery?: number;
 };
 
+export type ExplosionBlast = {
+  pos: Vec2;
+  radius: number;
+};
+
 export type SimulationSnapshot = {
   playerAngle: number;
   playerPos: Vec2;
@@ -108,4 +113,5 @@ export type SimulationEvents = {
     to: number;
   };
   chainHits: ChainHit[];
+  explosions: ExplosionBlast[];
 };

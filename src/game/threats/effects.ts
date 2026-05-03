@@ -101,13 +101,14 @@ export const explodeCore = (
   state.defeated += 1;
   state.score += scoreForThreat(core.kind, state.wave);
   state.sparks.push({ pos: { ...core.pos }, life: 0.36, maxLife: 0.36 });
+  const explosionRadius = options.radius ?? EXPLOSION_RADIUS;
+  events.explosions.push({ pos: { ...core.pos }, radius: explosionRadius });
 
   for (const target of meteors) {
     if (!target.alive || target === core) {
       continue;
     }
 
-    const explosionRadius = options.radius ?? EXPLOSION_RADIUS;
     const blastDistance = distance(core.pos, target.pos);
     if (blastDistance > explosionRadius + target.radius) {
       continue;
