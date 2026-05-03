@@ -5,6 +5,18 @@ import { TRACTOR_RANGE, TRACTOR_TURN_RATE } from "./config";
 
 export const updateThreat = (meteor: Meteor, dt: number): void => {
   if (
+    meteor.kind === "miniBoss" &&
+    meteor.spiralAngle !== undefined &&
+    meteor.spiralRadius !== undefined &&
+    meteor.spiralRadialSpeed !== undefined &&
+    meteor.spiralAngularSpeed !== undefined &&
+    meteor.spiralDirection !== undefined
+  ) {
+    updateMiniBossSpiral(meteor, dt);
+    return;
+  }
+
+  if (
     meteor.kind === "orbitalSatellite" &&
     !meteor.knocked &&
     meteor.orbitAngle !== undefined &&
@@ -20,6 +32,35 @@ export const updateThreat = (meteor: Meteor, dt: number): void => {
 
   meteor.pos.x += meteor.vel.x * dt;
   meteor.pos.y += meteor.vel.y * dt;
+};
+
+const updateMiniBossSpiral = (meteor: Meteor, dt: number): void => {
+  const previous = { ...meteor.pos };
+  meteor.spiralAngle =
+    (meteor.spiralAngle ?? 0) +
+    (meteor.spiralAngularSpeed ?? 0) * (meteor.spiralDirection ?? 1) * dt;
+  meteor.spiralRadius = Math.max(
+    0,
+    (meteor.spiralRadius ?? 0) - (meteor.spiralRadialSpeed ?? 0) * dt
+  );
+  meteor.pos = spiralPoint(meteor);
+
+  if (dt > 0) {
+    meteor.vel = {
+      x: (meteor.pos.x - previous.x) / dt,
+      y: (meteor.pos.y - previous.y) / dt
+    };
+  }
+};
+
+const spiralPoint = (meteor: Meteor): Meteor["pos"] => {
+  const angle = meteor.spiralAngle ?? 0;
+  const radius = meteor.spiralRadius ?? 0;
+
+  return {
+    x: CENTER.x + Math.cos(angle) * radius,
+    y: CENTER.y + Math.sin(angle) * radius
+  };
 };
 
 const updateOrbitalSatellite = (meteor: Meteor, dt: number): void => {

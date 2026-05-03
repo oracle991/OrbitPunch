@@ -75,11 +75,16 @@ const spawnOrbitalSatellite = (state: ThreatSpawnState): Meteor => {
 const spawnMiniBoss = (state: ThreatSpawnState): Meteor => {
   const params = rollThreatSpawnConfig("miniBoss", state.wave);
   const spawn = radialPoint(params.spawnAngle, OUTER_RADIUS + params.spawnRadiusOffset);
-  const inward = randomInboundDirection(spawn, params.aimRadius);
+  const inward = normalize({ x: CENTER.x - spawn.x, y: CENTER.y - spawn.y });
   return {
     ...createThreat(state.nextId(), "miniBoss", spawn, inward, params.speed, params.radius),
     hp: params.hp,
     maxHp: params.hp,
+    spiralAngle: params.spawnAngle,
+    spiralRadius: OUTER_RADIUS + params.spawnRadiusOffset,
+    spiralRadialSpeed: params.speed,
+    spiralAngularSpeed: 1.12 + state.wave * 0.045,
+    spiralDirection: Math.random() < 0.5 ? -1 : 1,
     hitCooldown: 0
   };
 };

@@ -30,6 +30,11 @@ export type Meteor = {
   orbitMajorRadius?: number;
   orbitMinorRadius?: number;
   orbitDirection?: number;
+  spiralAngle?: number;
+  spiralRadius?: number;
+  spiralRadialSpeed?: number;
+  spiralAngularSpeed?: number;
+  spiralDirection?: number;
   hitCooldown?: number;
 };
 
