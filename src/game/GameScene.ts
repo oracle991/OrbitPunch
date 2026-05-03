@@ -34,6 +34,25 @@ const THREAT_TEXTURE_URLS: Record<ThreatKind, string> = {
   tractorDrone: new URL("../../img/threat-tractor-drone-topdown.png", import.meta.url).href,
   miniBoss: new URL("../../img/threat-mini-boss-topdown.png", import.meta.url).href
 };
+const UPGRADE_ART_URLS: Record<UpgradeId, string> = {
+  orbitalAcceleration: new URL("../../img/upgrade/orbitalAcceleration.png", import.meta.url).href,
+  longArm: new URL("../../img/upgrade/longArm.png", import.meta.url).href,
+  quickPunch: new URL("../../img/upgrade/quickPunch.png", import.meta.url).href,
+  recoverySystem: new URL("../../img/upgrade/recoverySystem.png", import.meta.url).href,
+  homingKnockback: new URL("../../img/upgrade/homingKnockback.png", import.meta.url).href,
+  chainMagnet: new URL("../../img/upgrade/chainMagnet.png", import.meta.url).href,
+  shieldSiphon: new URL("../../img/upgrade/shieldSiphon.png", import.meta.url).href,
+  explosiveCoreResonance: new URL("../../img/upgrade/explosiveCoreResonance.png", import.meta.url).href,
+  wideGlove: new URL("../../img/upgrade/wideGlove.png", import.meta.url).href,
+  perfectTiming: new URL("../../img/upgrade/perfectTiming.png", import.meta.url).href,
+  orbitalShield: new URL("../../img/upgrade/orbitalShield.png", import.meta.url).href,
+  emergencyBoost: new URL("../../img/upgrade/emergencyBoost.png", import.meta.url).href,
+  planetRepair: new URL("../../img/upgrade/planetRepair.png", import.meta.url).href,
+  twinPunch: new URL("../../img/upgrade/twinPunch.png", import.meta.url).href,
+  overdrive: new URL("../../img/upgrade/overdrive.png", import.meta.url).href,
+  starburst: new URL("../../img/upgrade/starburst.png", import.meta.url).href,
+  punchReload: new URL("../../img/upgrade/punchReload.png", import.meta.url).href
+};
 
 const PLANET_VISIBLE_WIDTH_RATIO = 147 / 192;
 const PLAYER_DISPLAY_SIZE = 72;
@@ -259,7 +278,9 @@ export class GameScene extends Phaser.Scene {
   private upgradeChoiceHtml(choice: UpgradeChoice): string {
     return `
       <button class="upgrade-choice" type="button" data-upgrade-id="${choice.id}" role="listitem">
-        <span class="upgrade-art" aria-hidden="true"></span>
+        <span class="upgrade-art" aria-hidden="true">
+          <img src="${UPGRADE_ART_URLS[choice.id]}" alt="" loading="eager" />
+        </span>
         <span class="upgrade-name">${choice.title}</span>
         <span class="upgrade-description">${choice.description}</span>
       </button>
