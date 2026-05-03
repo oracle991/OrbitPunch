@@ -628,7 +628,6 @@ export class OrbitPunchSimulation {
     for (const meteor of this.meteors) {
       if (
         !meteor.alive ||
-        meteor.knocked ||
         distance(meteor.pos, CENTER) > PLANET_RADIUS + meteor.radius - 2
       ) {
         continue;
