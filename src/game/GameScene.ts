@@ -30,14 +30,22 @@ export class GameScene extends Phaser.Scene {
   public create(): void {
     this.graphics = this.add.graphics();
 
-    this.input.keyboard?.on("keydown-SPACE", () => this.fire());
+    this.input.keyboard?.on("keydown-SPACE", (event: KeyboardEvent) => {
+      if (!event.repeat) {
+        this.pressFire();
+      }
+    });
+    this.input.keyboard?.on("keyup-SPACE", () => this.releaseFire());
     this.input.keyboard?.on("keydown-ESC", () => {
       if (!this.sim.snapshot().gameOver) {
+        this.cancelFire();
         this.scene.pause();
         this.showOverlay("Paused", "Press Esc to resume.", "Resume");
       }
     });
-    this.input.on("pointerdown", () => this.fire());
+    this.input.on("pointerdown", () => this.pressFire());
+    this.input.on("pointerup", () => this.releaseFire());
+    this.input.on("pointerupoutside", () => this.releaseFire());
 
     this.hud.startButton.addEventListener("click", () => {
       if (this.scene.isPaused()) {
@@ -100,13 +108,26 @@ export class GameScene extends Phaser.Scene {
     this.hud.overlay.classList.add("hidden");
   }
 
-  private fire(): void {
+  private pressFire(): void {
     if (this.scene.isPaused()) {
       return;
     }
-    if (this.sim.fire()) {
-      this.shakeTime = Math.max(this.shakeTime, 0.05);
+    this.sim.pressFire();
+  }
+
+  private releaseFire(): void {
+    if (this.scene.isPaused()) {
+      this.cancelFire();
+      return;
     }
+    const result = this.sim.releaseFire();
+    if (result.fired) {
+      this.shakeTime = Math.max(this.shakeTime, result.charged ? 0.11 : 0.05);
+    }
+  }
+
+  private cancelFire(): void {
+    this.sim.cancelFire();
   }
 
   private showOverlay(title: string, summary: string, button: string): void {
@@ -288,6 +309,19 @@ export class GameScene extends Phaser.Scene {
       this.graphics.strokeCircle(pos.x, pos.y, 23);
     }
 
+    if (snapshot.charge.held && !snapshot.charge.canceled) {
+      const chargeAlpha = snapshot.charge.active ? 0.74 : 0.24 + snapshot.charge.progress * 0.34;
+      const chargeRadius = 24 + snapshot.charge.progress * 10;
+      this.graphics.lineStyle(
+        3,
+        snapshot.charge.active ? palette.punchGlove : palette.punch,
+        chargeAlpha
+      );
+      this.graphics.strokeCircle(pos.x, pos.y, chargeRadius);
+      this.graphics.fillStyle(palette.punch, 0.08 + snapshot.charge.progress * 0.12);
+      this.graphics.fillCircle(pos.x, pos.y, chargeRadius + 3);
+    }
+
     this.graphics.fillStyle(palette.player, blinkAlpha);
     this.graphics.fillCircle(pos.x, pos.y, 15);
     this.graphics.fillStyle(palette.playerCore, blinkAlpha);
@@ -329,8 +363,8 @@ export class GameScene extends Phaser.Scene {
         this.graphics,
         punch.pos.x,
         punch.pos.y,
-        punch.radius * 1.55,
-        punch.radius * 1.18,
+        punch.radius * (punch.charged ? 1.95 : 1.55),
+        punch.radius * (punch.charged ? 1.42 : 1.18),
         angle
       );
       this.graphics.fillCircle(
@@ -339,7 +373,7 @@ export class GameScene extends Phaser.Scene {
         punch.radius * 0.52
       );
 
-      this.graphics.lineStyle(3, 0xfff6c4, 0.8 * alpha);
+      this.graphics.lineStyle(punch.charged ? 5 : 3, 0xfff6c4, 0.8 * alpha);
       this.graphics.beginPath();
       this.graphics.moveTo(
         punch.pos.x + sideX * 4 - punch.direction.x * 5,
@@ -360,8 +394,12 @@ export class GameScene extends Phaser.Scene {
       this.graphics.strokePath();
 
       if (punch.phase === "holding") {
-        this.graphics.lineStyle(2, 0xffffff, 0.34);
-        this.graphics.strokeCircle(punch.pos.x, punch.pos.y, punch.radius + 11);
+        this.graphics.lineStyle(punch.charged ? 4 : 2, 0xffffff, punch.charged ? 0.58 : 0.34);
+        this.graphics.strokeCircle(
+          punch.pos.x,
+          punch.pos.y,
+          punch.radius + (punch.charged ? 16 : 11)
+        );
       }
     }
   }

@@ -38,6 +38,10 @@ const PUNCH_RANGE = 120;
 const PUNCH_HOLD_TIME = 0.24;
 const PUNCH_COOLDOWN = 0.56;
 const PUNCH_RETURN_EPSILON = 6;
+const CHARGE_START_THRESHOLD = 0.08;
+const CHARGE_ORBIT_SPEED_MULTIPLIER = 0.5;
+const CHARGE_PUNCH_SPEED_MULTIPLIER = 2;
+const CHARGE_PUNCH_DAMAGE_MULTIPLIER = 2;
 const SATELLITE_KNOCK_SPEED = 250;
 const SATELLITE_HIT_LOCKOUT = 1.35;
 const SATELLITE_INVULNERABILITY = 1.35;
@@ -57,6 +61,10 @@ export class OrbitPunchSimulation {
   private chainTreeSizes = new Map<number, number>();
   private spawnTimer = 0.85;
   private cooldown = 0;
+  private fireHeld = false;
+  private chargeTimer = 0;
+  private chargeActive = false;
+  private chargeCanceled = false;
   private satelliteInvulnerability = 0;
   private score = 0;
   private wave = 1;
@@ -75,6 +83,10 @@ export class OrbitPunchSimulation {
     this.chainTreeSizes = new Map();
     this.spawnTimer = 0.55;
     this.cooldown = 0;
+    this.fireHeld = false;
+    this.chargeTimer = 0;
+    this.chargeActive = false;
+    this.chargeCanceled = false;
     this.satelliteInvulnerability = 0;
     this.score = 0;
     this.wave = 1;
@@ -87,11 +99,49 @@ export class OrbitPunchSimulation {
     this.gameOver = false;
   }
 
-  public fire(): boolean {
-    if (this.gameOver || this.cooldown > 0) {
+  public pressFire(): boolean {
+    if (this.gameOver || this.cooldown > 0 || this.fireHeld) {
       return false;
     }
 
+    this.fireHeld = true;
+    this.chargeTimer = 0;
+    this.chargeActive = false;
+    this.chargeCanceled = false;
+    return true;
+  }
+
+  public releaseFire(): { fired: boolean; charged: boolean } {
+    if (!this.fireHeld) {
+      return { fired: false, charged: false };
+    }
+
+    const charged = this.chargeActive;
+    const canFire = !this.gameOver && !this.chargeCanceled && this.cooldown <= 0;
+    this.fireHeld = false;
+    this.chargeTimer = 0;
+    this.chargeActive = false;
+    this.chargeCanceled = false;
+
+    if (!canFire) {
+      return { fired: false, charged: false };
+    }
+
+    this.createPunch(charged);
+    this.cooldown = PUNCH_COOLDOWN;
+    return { fired: true, charged };
+  }
+
+  public cancelFire(): void {
+    this.fireHeld = false;
+    this.chargeTimer = 0;
+    this.chargeActive = false;
+    this.chargeCanceled = false;
+  }
+
+  private createPunch(charged: boolean): void {
+    const speedMultiplier = charged ? CHARGE_PUNCH_SPEED_MULTIPLIER : 1;
+    const damageMultiplier = charged ? CHARGE_PUNCH_DAMAGE_MULTIPLIER : 1;
     const origin = radialPoint(this.playerAngle, ORBIT_RADIUS + 21);
     const direction = normalize({ x: origin.x - CENTER.x, y: origin.y - CENTER.y });
     this.punches.push({
@@ -105,10 +155,13 @@ export class OrbitPunchSimulation {
       hold: PUNCH_HOLD_TIME,
       life: 1,
       maxLife: 1,
+      extendSpeed: PUNCH_EXTEND_SPEED * speedMultiplier,
+      returnSpeed: PUNCH_RETURN_SPEED * speedMultiplier,
+      damageMultiplier,
+      knockSpeedMultiplier: speedMultiplier,
+      charged,
       phase: "extending"
     });
-    this.cooldown = PUNCH_COOLDOWN;
-    return true;
   }
 
   public update(dt: number): SimulationEvents {
@@ -123,7 +176,11 @@ export class OrbitPunchSimulation {
       return events;
     }
 
-    this.playerAngle += PLAYER_ORBIT_SPEED * dt;
+    this.updateCharge(dt);
+    const isCharging = this.chargeActive && !this.chargeCanceled;
+    const orbitSpeed =
+      PLAYER_ORBIT_SPEED * (isCharging ? CHARGE_ORBIT_SPEED_MULTIPLIER : 1);
+    this.playerAngle += orbitSpeed * dt;
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.satelliteInvulnerability = Math.max(0, this.satelliteInvulnerability - dt);
     this.spawnTimer -= dt;
@@ -199,9 +256,26 @@ export class OrbitPunchSimulation {
       maxPlanetHp: MAX_PLANET_HP,
       cooldown: this.cooldown,
       cooldownMax: this.cooldown > PUNCH_COOLDOWN ? SATELLITE_HIT_LOCKOUT : PUNCH_COOLDOWN,
+      charge: {
+        held: this.fireHeld,
+        active: this.chargeActive,
+        canceled: this.chargeCanceled,
+        progress: Math.min(1, this.chargeTimer / CHARGE_START_THRESHOLD)
+      },
       satelliteInvulnerability: this.satelliteInvulnerability,
       gameOver: this.gameOver
     };
+  }
+
+  private updateCharge(dt: number): void {
+    if (!this.fireHeld || this.chargeCanceled) {
+      return;
+    }
+
+    this.chargeTimer += dt;
+    if (this.chargeTimer >= CHARGE_START_THRESHOLD) {
+      this.chargeActive = true;
+    }
   }
 
   private updatePunches(dt: number): void {
@@ -211,7 +285,7 @@ export class OrbitPunchSimulation {
       punch.origin = { ...currentOrigin };
 
       if (punch.phase === "extending") {
-        punch.distance = Math.min(punch.maxDistance, punch.distance + PUNCH_EXTEND_SPEED * dt);
+        punch.distance = Math.min(punch.maxDistance, punch.distance + punch.extendSpeed * dt);
         punch.pos.x = punch.origin.x + punch.direction.x * punch.distance;
         punch.pos.y = punch.origin.y + punch.direction.y * punch.distance;
 
@@ -232,7 +306,7 @@ export class OrbitPunchSimulation {
           y: punch.origin.y - punch.pos.y
         };
         const remaining = Math.hypot(toOrigin.x, toOrigin.y);
-        const step = PUNCH_RETURN_SPEED * dt;
+        const step = punch.returnSpeed * dt;
 
         if (remaining <= step || remaining <= PUNCH_RETURN_EPSILON) {
           punch.pos = { ...punch.origin };
@@ -298,12 +372,21 @@ export class OrbitPunchSimulation {
     const outward = normalize({ x: meteor.pos.x - CENTER.x, y: meteor.pos.y - CENTER.y });
     const hitDirection = direction ?? outward;
     if (meteor.kind === "miniBoss") {
-      this.damageMiniBoss(meteor, 1, 55 + this.wave * 12, MINI_BOSS_HIT_COOLDOWN);
+      this.damageMiniBoss(
+        meteor,
+        punch.damageMultiplier,
+        55 + this.wave * 12,
+        MINI_BOSS_HIT_COOLDOWN
+      );
       punch.phase = "returning";
       return;
     }
 
-    this.knockMeteor(meteor, hitDirection, PUNCH_KNOCK_SPEED + this.wave * 18);
+    this.knockMeteor(
+      meteor,
+      hitDirection,
+      (PUNCH_KNOCK_SPEED + this.wave * 18) * punch.knockSpeedMultiplier
+    );
   }
 
   private resolveMeteorImpacts(events: SimulationEvents): void {
@@ -470,6 +553,7 @@ export class OrbitPunchSimulation {
       });
       const knockDirection = length(direction) > 0.001 ? direction : fallbackDirection;
       if (meteor.kind === "miniBoss") {
+        this.cancelCharge();
         this.damageMiniBoss(meteor, 1, 45 + this.wave * 10, MINI_BOSS_HIT_COOLDOWN);
         this.cooldown = Math.max(this.cooldown, SATELLITE_HIT_LOCKOUT);
         this.satelliteInvulnerability = SATELLITE_INVULNERABILITY;
@@ -479,6 +563,7 @@ export class OrbitPunchSimulation {
       }
 
       const overlap = SATELLITE_RADIUS + meteor.radius - distance(meteor.pos, playerPos) + 0.1;
+      this.cancelCharge();
       meteor.pos.x += knockDirection.x * overlap;
       meteor.pos.y += knockDirection.y * overlap;
       this.deflectMeteor(meteor, knockDirection, SATELLITE_KNOCK_SPEED + this.wave * 14);
@@ -487,6 +572,16 @@ export class OrbitPunchSimulation {
       events.hit = true;
       events.satelliteHit = true;
     }
+  }
+
+  private cancelCharge(): void {
+    if (!this.fireHeld) {
+      return;
+    }
+
+    this.chargeActive = false;
+    this.chargeCanceled = true;
+    this.chargeTimer = 0;
   }
 
   private pickImpactSource(first: Meteor, second: Meteor): Meteor {

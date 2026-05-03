@@ -49,6 +49,11 @@ export type Punch = {
   hold: number;
   life: number;
   maxLife: number;
+  extendSpeed: number;
+  returnSpeed: number;
+  damageMultiplier: number;
+  knockSpeedMultiplier: number;
+  charged: boolean;
   phase: "extending" | "holding" | "returning";
 };
 
@@ -76,6 +81,12 @@ export type SimulationSnapshot = {
   maxPlanetHp: number;
   cooldown: number;
   cooldownMax: number;
+  charge: {
+    held: boolean;
+    active: boolean;
+    canceled: boolean;
+    progress: number;
+  };
   satelliteInvulnerability: number;
   gameOver: boolean;
 };
