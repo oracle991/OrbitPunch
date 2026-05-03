@@ -698,27 +698,10 @@ export class GameScene extends Phaser.Scene {
         }
 
         const alpha = 0.34 * (1 - distanceToTarget / TRACTOR_RANGE);
-        const toCenter = {
-          x: world.center.x - target.pos.x,
-          y: world.center.y - target.pos.y
-        };
-        const toCenterLength = Math.hypot(toCenter.x, toCenter.y) || 1;
-        const guideLength = Math.min(72, toCenterLength);
-        const guideEnd = {
-          x: target.pos.x + (toCenter.x / toCenterLength) * guideLength,
-          y: target.pos.y + (toCenter.y / toCenterLength) * guideLength
-        };
-
         this.graphics.lineStyle(1, palette.tractorBeam, alpha * 0.55);
         this.graphics.beginPath();
         this.graphics.moveTo(drone.pos.x, drone.pos.y);
         this.graphics.lineTo(target.pos.x, target.pos.y);
-        this.graphics.strokePath();
-
-        this.graphics.lineStyle(2, palette.tractorBeam, alpha);
-        this.graphics.beginPath();
-        this.graphics.moveTo(target.pos.x, target.pos.y);
-        this.graphics.lineTo(guideEnd.x, guideEnd.y);
         this.graphics.strokePath();
       }
     }

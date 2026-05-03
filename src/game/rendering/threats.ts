@@ -1,7 +1,6 @@
 import Phaser from "phaser";
 import type { Meteor, SimulationSnapshot } from "../types";
 import { TRACTOR_RANGE } from "../threats/config";
-import { world } from "../world";
 import { palette } from "./palette";
 import { fillRotatedEllipse } from "./primitives";
 
@@ -177,27 +176,11 @@ const drawTractorLinks = (
         continue;
       }
       const alpha = 0.34 * (1 - distanceToTarget / TRACTOR_RANGE);
-      const toCenter = {
-        x: world.center.x - target.pos.x,
-        y: world.center.y - target.pos.y
-      };
-      const toCenterLength = Math.hypot(toCenter.x, toCenter.y) || 1;
-      const guideLength = Math.min(72, toCenterLength);
-      const guideEnd = {
-        x: target.pos.x + (toCenter.x / toCenterLength) * guideLength,
-        y: target.pos.y + (toCenter.y / toCenterLength) * guideLength
-      };
 
       graphics.lineStyle(1, palette.tractorBeam, alpha * 0.55);
       graphics.beginPath();
       graphics.moveTo(drone.pos.x, drone.pos.y);
       graphics.lineTo(target.pos.x, target.pos.y);
-      graphics.strokePath();
-
-      graphics.lineStyle(2, palette.tractorBeam, alpha);
-      graphics.beginPath();
-      graphics.moveTo(target.pos.x, target.pos.y);
-      graphics.lineTo(guideEnd.x, guideEnd.y);
       graphics.strokePath();
     }
   }
