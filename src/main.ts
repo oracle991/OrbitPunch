@@ -34,6 +34,7 @@ new Phaser.Game({
       wave: getElement("wave-value"),
       cooldown: getElement("cooldown-value"),
       overlay: getElement("overlay"),
+      tutorialButton: getElement("tutorial-button"),
       startButton: getElement("start-button")
     })
   ]

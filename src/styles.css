@@ -59,12 +59,41 @@ button {
   position: absolute;
   top: 16px;
   left: 16px;
-  right: 16px;
+  right: 72px;
   z-index: 2;
   display: grid;
   grid-template-columns: minmax(180px, 1fr) repeat(3, minmax(74px, auto));
   gap: 10px;
   pointer-events: none;
+}
+
+.icon-button {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid rgba(197, 239, 255, 0.3);
+  border-radius: 50%;
+  background: rgba(5, 15, 21, 0.68);
+  color: #fff6c4;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 10px 28px rgba(0, 0, 0, 0.28);
+}
+
+.icon-button:hover,
+.icon-button:focus-visible {
+  border-color: rgba(248, 212, 95, 0.78);
+  background: rgba(18, 43, 54, 0.9);
+  outline: none;
 }
 
 .stat {
@@ -141,6 +170,13 @@ button {
   padding: clamp(20px, 3.4vw, 30px);
 }
 
+.panel.tutorial-panel {
+  width: min(100%, 900px);
+  max-height: 100%;
+  overflow: auto;
+  padding: clamp(18px, 3vw, 28px);
+}
+
 .kicker {
   margin: 0 0 8px;
   color: #8ae8ff;
@@ -172,6 +208,100 @@ h1 {
   color: #071018;
   font-weight: 900;
   cursor: pointer;
+}
+
+.tutorial-content {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.tutorial-section {
+  padding: 14px;
+  border: 1px solid rgba(197, 239, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.tutorial-section h2 {
+  margin: 0 0 10px;
+  color: #fff6c4;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.tutorial-section p,
+.tutorial-section li {
+  color: #d5eef8;
+  font-size: 14px;
+  line-height: 1.58;
+}
+
+.tutorial-section p {
+  margin: 0;
+}
+
+.tutorial-section ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.threat-guide {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.threat-card {
+  display: grid;
+  grid-template-rows: 58px auto auto 1fr;
+  gap: 7px;
+  min-height: 236px;
+  padding: 12px;
+  border: 1px solid rgba(138, 232, 255, 0.22);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(15, 44, 57, 0.72), rgba(7, 21, 30, 0.78)),
+    rgba(10, 28, 39, 0.7);
+}
+
+.threat-art {
+  display: grid;
+  width: 100%;
+  min-height: 0;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(138, 232, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.threat-art img {
+  display: block;
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+}
+
+.threat-card h3 {
+  margin: 0;
+  color: #f5fbff;
+  font-size: 14px;
+  line-height: 1.15;
+}
+
+.threat-damage {
+  color: #f8d45f;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.threat-card p {
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .upgrade-grid {
@@ -277,8 +407,15 @@ h1 {
   #hud {
     top: 10px;
     left: 10px;
-    right: 10px;
+    right: 62px;
     grid-template-columns: 1fr 1fr;
+  }
+
+  .icon-button {
+    top: 10px;
+    right: 10px;
+    width: 42px;
+    height: 42px;
   }
 
   .stat {
@@ -290,6 +427,31 @@ h1 {
     width: min(100%, 520px);
     max-height: 100%;
     padding: 18px;
+  }
+
+  .panel.tutorial-panel {
+    width: min(100%, 540px);
+    padding: 16px;
+  }
+
+  .threat-guide {
+    grid-template-columns: 1fr;
+  }
+
+  .threat-card {
+    grid-template-columns: 72px 1fr;
+    grid-template-rows: auto auto 1fr;
+    min-height: 0;
+  }
+
+  .threat-art {
+    grid-row: 1 / 4;
+    min-height: 72px;
+  }
+
+  .threat-art img {
+    width: 66px;
+    height: 66px;
   }
 
   .upgrade-grid {

@@ -73,6 +73,7 @@ type HudElements = {
   wave: HTMLElement;
   cooldown: HTMLElement;
   overlay: HTMLElement;
+  tutorialButton: HTMLButtonElement;
   startButton: HTMLButtonElement;
 };
 
@@ -89,6 +90,7 @@ export class GameScene extends Phaser.Scene {
   private shakeTime = 0;
   private hitStop = 0;
   private hitLabels: Phaser.GameObjects.Text[] = [];
+  private overlayAction: (() => void) | undefined;
 
   public constructor(hud: HudElements) {
     super("game");
@@ -128,8 +130,16 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard?.on("keydown-ESC", () => {
       if (!this.sim.snapshot().gameOver) {
         this.cancelFire();
+        if (this.scene.isPaused()) {
+          this.hideOverlay();
+          this.scene.resume();
+          return;
+        }
         this.scene.pause();
-        this.showOverlay("Paused", "Press Esc to resume.", "Resume");
+        this.showOverlay("Paused", "Press Esc to resume.", "Resume", () => {
+          this.hideOverlay();
+          this.scene.resume();
+        });
       }
     });
     this.input.on("pointerdown", () => this.pressFire());
@@ -137,15 +147,13 @@ export class GameScene extends Phaser.Scene {
     this.input.on("pointerupoutside", () => this.releaseFire());
 
     this.hud.startButton.addEventListener("click", () => {
-      if (this.scene.isPaused()) {
-        this.scene.resume();
-        this.hud.overlay.classList.add("hidden");
-        return;
-      }
-      this.startGame();
+      this.handleOverlayAction();
     });
+    this.hud.tutorialButton.addEventListener("click", () => this.showTutorialOverlay());
 
-    this.showOverlay("Orbit Punch", "Space / Click / Tap to punch outward.", "Start");
+    this.showOverlay("Orbit Punch", "Space / Click / Tap to punch outward.", "Start", () =>
+      this.startGame()
+    );
     this.render(this.sim.snapshot(), 0);
   }
 
@@ -178,7 +186,8 @@ export class GameScene extends Phaser.Scene {
       this.showOverlay(
         "Game Over",
         `Score ${snapshot.score.toLocaleString()} / Wave ${snapshot.wave}`,
-        "Retry"
+        "Retry",
+        () => this.startGame()
       );
     } else if (events.waveAdvanced) {
       this.showUpgradeOverlay(events.waveAdvanced.to);
@@ -196,7 +205,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.hitLabels = [];
     this.cameras.main.setScroll(0, 0);
-    this.hud.overlay.classList.add("hidden");
+    this.hideOverlay();
   }
 
   private pressFire(): void {
@@ -221,10 +230,16 @@ export class GameScene extends Phaser.Scene {
     this.sim.cancelFire();
   }
 
-  private showOverlay(title: string, summary: string, button: string): void {
+  private showOverlay(
+    title: string,
+    summary: string,
+    button: string,
+    action: () => void
+  ): void {
     const panel = this.hud.overlay.querySelector(".panel");
     if (panel) {
       panel.classList.remove("upgrade-panel");
+      panel.classList.remove("tutorial-panel");
       panel.innerHTML = `
         <p class="kicker">Orbit Punch Prototype</p>
         <h1>${title}</h1>
@@ -232,16 +247,120 @@ export class GameScene extends Phaser.Scene {
         <button id="start-button" type="button">${button}</button>
       `;
       this.hud.startButton = panel.querySelector("#start-button") as HTMLButtonElement;
-      this.hud.startButton.addEventListener("click", () => {
-        if (this.scene.isPaused()) {
-          this.scene.resume();
-          this.hud.overlay.classList.add("hidden");
-          return;
-        }
-        this.startGame();
-      });
+      this.hud.startButton.addEventListener("click", () => this.handleOverlayAction());
     }
+    this.overlayAction = action;
     this.hud.overlay.classList.remove("hidden");
+  }
+
+  private showTutorialOverlay(): void {
+    const snapshot = this.sim.snapshot();
+    const shouldPauseGame = !snapshot.gameOver && !this.scene.isPaused();
+    this.cancelFire();
+    if (shouldPauseGame) {
+      this.scene.pause();
+    }
+
+    const panel = this.hud.overlay.querySelector(".panel");
+    if (panel) {
+      panel.classList.remove("upgrade-panel");
+      panel.classList.add("tutorial-panel");
+      panel.innerHTML = `
+        <p class="kicker">Tutorial</p>
+        <h1>チュートリアル</h1>
+        <div class="tutorial-content">
+          <section class="tutorial-section" aria-labelledby="tutorial-controls">
+            <h2 id="tutorial-controls">操作方法</h2>
+            <ul>
+              <li><strong>Space / Click / Tap</strong> で外向きパンチを構え、離すと発射します。</li>
+              <li>長押しするとチャージパンチになり、威力と速度が上がります。</li>
+              <li>衛星は惑星の周りを自動で回ります。正面に脅威が来るタイミングで撃ちましょう。</li>
+              <li><strong>Esc</strong> でポーズできます。脅威同士をぶつけるとチェーンが伸び、惑星HPが少し回復します。</li>
+            </ul>
+          </section>
+          <section class="tutorial-section" aria-labelledby="tutorial-gameover">
+            <h2 id="tutorial-gameover">ゲームオーバー</h2>
+            <p>脅威が惑星に衝突すると PLANET が減ります。PLANET が 0 になるとゲームオーバーです。衛星本体にぶつかった脅威は弾けますが、パンチのクールダウンと短い無敵時間が発生します。</p>
+          </section>
+          <section class="tutorial-section" aria-labelledby="tutorial-threats">
+            <h2 id="tutorial-threats">脅威</h2>
+            <div class="threat-guide" role="list">
+              ${this.threatGuideHtml()}
+            </div>
+          </section>
+        </div>
+        <button id="start-button" type="button">Close</button>
+      `;
+      this.hud.startButton = panel.querySelector("#start-button") as HTMLButtonElement;
+      this.hud.startButton.addEventListener("click", () => this.handleOverlayAction());
+    }
+
+    this.overlayAction = () => {
+      this.hideOverlay();
+      if (shouldPauseGame) {
+        this.scene.resume();
+      }
+    };
+    this.hud.overlay.classList.remove("hidden");
+  }
+
+  private threatGuideHtml(): string {
+    const threats = [
+      {
+        name: "Meteor",
+        image: THREAT_TEXTURE_URLS.meteor,
+        damage: "18",
+        text: "まっすぐ惑星へ向かう基本脅威。パンチで外へ弾き返し、別の脅威へ当てるチェーンの起点にしやすい相手です。"
+      },
+      {
+        name: "Orbital Satellite",
+        image: THREAT_TEXTURE_URLS.orbitalSatellite,
+        damage: "16",
+        text: "惑星の周辺を横切る人工衛星。軌道がずれるので、接近角度を見て早めにパンチを合わせる必要があります。"
+      },
+      {
+        name: "Explosive Core",
+        image: THREAT_TEXTURE_URLS.explosiveCore,
+        damage: "32",
+        text: "破壊時に爆発し、周囲の脅威を巻き込みます。うまく使うと大きなチェーンと回復につながります。"
+      },
+      {
+        name: "Tractor Drone",
+        image: THREAT_TEXTURE_URLS.tractorDrone,
+        damage: "20",
+        text: "牽引ビームで周囲の脅威の進行方向を惑星側へ曲げます。残すほど盤面が崩れやすくなります。"
+      },
+      {
+        name: "Mini Boss",
+        image: THREAT_TEXTURE_URLS.miniBoss,
+        damage: "38",
+        text: "HPを持つ大型脅威。パンチやチェーン衝突を複数回当てて倒します。衝突ダメージが高いので優先して対処しましょう。"
+      }
+    ];
+
+    return threats
+      .map(
+        (threat) => `
+          <article class="threat-card" role="listitem">
+            <span class="threat-art" aria-hidden="true">
+              <img src="${threat.image}" alt="" loading="eager" />
+            </span>
+            <h3>${threat.name}</h3>
+            <span class="threat-damage">Planet damage ${threat.damage}</span>
+            <p>${threat.text}</p>
+          </article>
+        `
+      )
+      .join("");
+  }
+
+  private handleOverlayAction(): void {
+    this.overlayAction?.();
+  }
+
+  private hideOverlay(): void {
+    this.hud.overlay.classList.add("hidden");
+    this.overlayAction = undefined;
   }
 
   private showUpgradeOverlay(wave: number): void {
@@ -267,11 +386,12 @@ export class GameScene extends Phaser.Scene {
         button.addEventListener("click", () => {
           this.sim.applyUpgrade(button.dataset.upgradeId as UpgradeId);
           this.render(this.sim.snapshot(), 0);
-          this.hud.overlay.classList.add("hidden");
+          this.hideOverlay();
           this.scene.resume();
         });
       }
     }
+    this.overlayAction = undefined;
     this.hud.overlay.classList.remove("hidden");
   }
 
