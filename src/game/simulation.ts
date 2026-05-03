@@ -232,6 +232,7 @@ export class OrbitPunchSimulation {
       id: nextId++,
       orbitAngleOffset: angle - this.playerAngle,
       origin,
+      originVel: { x: 0, y: 0 },
       pos: origin,
       vel: {
         x: direction.x * PUNCH_EXTEND_SPEED * speedMultiplier,
@@ -411,7 +412,15 @@ export class OrbitPunchSimulation {
         this.playerAngle + punch.orbitAngleOffset,
         ORBIT_RADIUS + 21
       );
+      const originVelocity =
+        dt > 0
+          ? {
+              x: (currentOrigin.x - punch.origin.x) / dt,
+              y: (currentOrigin.y - punch.origin.y) / dt
+            }
+          : { x: 0, y: 0 };
       punch.origin = { ...currentOrigin };
+      punch.originVel = originVelocity;
       punch.chainTime += dt;
 
       if (punch.phase === "extending") {
@@ -462,13 +471,21 @@ export class OrbitPunchSimulation {
           const damping = PUNCH_RETURN_DAMPING * (punch.charged ? 1.08 : 1);
           const reelAcceleration = PUNCH_RETURN_REEL_ACCELERATION * (punch.charged ? 1.18 : 1);
           const returnDirection = normalize(toOrigin);
+          const relativeVelocity = {
+            x: punch.vel.x - punch.originVel.x,
+            y: punch.vel.y - punch.originVel.y
+          };
           punch.vel.x +=
-            (toOrigin.x * spring + returnDirection.x * reelAcceleration - punch.vel.x * damping) *
+            (toOrigin.x * spring +
+              returnDirection.x * reelAcceleration -
+              relativeVelocity.x * damping) *
             dt;
           punch.vel.y +=
-            (toOrigin.y * spring + returnDirection.y * reelAcceleration - punch.vel.y * damping) *
+            (toOrigin.y * spring +
+              returnDirection.y * reelAcceleration -
+              relativeVelocity.y * damping) *
             dt;
-          this.limitPunchSpeed(punch, punch.returnSpeed * 1.9);
+          this.limitPunchSpeedRelativeTo(punch, punch.returnSpeed * 1.9, punch.originVel);
           punch.pos.x += punch.vel.x * dt;
           punch.pos.y += punch.vel.y * dt;
 
@@ -504,6 +521,21 @@ export class OrbitPunchSimulation {
     const scale = maxSpeed / speed;
     punch.vel.x *= scale;
     punch.vel.y *= scale;
+  }
+
+  private limitPunchSpeedRelativeTo(punch: Punch, maxSpeed: number, referenceVelocity: Vec2): void {
+    const relativeVelocity = {
+      x: punch.vel.x - referenceVelocity.x,
+      y: punch.vel.y - referenceVelocity.y
+    };
+    const speed = length(relativeVelocity);
+    if (speed <= maxSpeed || speed <= 0.001) {
+      return;
+    }
+
+    const scale = maxSpeed / speed;
+    punch.vel.x = referenceVelocity.x + relativeVelocity.x * scale;
+    punch.vel.y = referenceVelocity.y + relativeVelocity.y * scale;
   }
 
   private collectPunch(punch: Punch): void {

@@ -42,6 +42,7 @@ export type Punch = {
   id: number;
   orbitAngleOffset: number;
   origin: Vec2;
+  originVel: Vec2;
   pos: Vec2;
   vel: Vec2;
   direction: Vec2;
