@@ -7,9 +7,46 @@ import {
   type UpgradeId
 } from "./simulation";
 import { palette } from "./rendering/palette";
-import { fillRotatedEllipse } from "./rendering/primitives";
-import { drawThreats } from "./rendering/threats";
+import { TRACTOR_RANGE } from "./threats/config";
+import type { Meteor, Punch, ThreatKind, Vec2 } from "./types";
 import { world } from "./world";
+
+const PLANET_TEXTURE_KEY = "planet-topdown";
+const PLAYER_TEXTURE_KEY = "player-topdown";
+const PUNCH_TEXTURE_KEY = "punch-topdown";
+const CHAIN_TEXTURE_KEY = "chain-link-topdown";
+const THREAT_TEXTURE_KEYS: Record<ThreatKind, string> = {
+  meteor: "threat-meteor-topdown",
+  orbitalSatellite: "threat-orbital-satellite-topdown",
+  explosiveCore: "threat-explosive-core-topdown",
+  tractorDrone: "threat-tractor-drone-topdown",
+  miniBoss: "threat-mini-boss-topdown"
+};
+
+const PLANET_TEXTURE_URL = new URL("../../img/planet-topdown.png", import.meta.url).href;
+const PLAYER_TEXTURE_URL = new URL("../../img/player-topdown.png", import.meta.url).href;
+const PUNCH_TEXTURE_URL = new URL("../../img/punch-topdown.png", import.meta.url).href;
+const CHAIN_TEXTURE_URL = new URL("../../img/chain-link-topdown.png", import.meta.url).href;
+const THREAT_TEXTURE_URLS: Record<ThreatKind, string> = {
+  meteor: new URL("../../img/threat-meteor-topdown.png", import.meta.url).href,
+  orbitalSatellite: new URL("../../img/threat-orbital-satellite-topdown.png", import.meta.url).href,
+  explosiveCore: new URL("../../img/threat-explosive-core-topdown.png", import.meta.url).href,
+  tractorDrone: new URL("../../img/threat-tractor-drone-topdown.png", import.meta.url).href,
+  miniBoss: new URL("../../img/threat-mini-boss-topdown.png", import.meta.url).href
+};
+
+const PLANET_VISIBLE_WIDTH_RATIO = 147 / 192;
+const PLAYER_DISPLAY_SIZE = 72;
+const PUNCH_VISIBLE_WIDTH_RATIO = 99 / 128;
+const CHAIN_LINK_HEIGHT = 18;
+const CHAIN_LINK_PADDING = 18;
+const THREAT_VISIBLE_WIDTH_RATIOS: Record<ThreatKind, number> = {
+  meteor: 70 / 96,
+  orbitalSatellite: 84 / 96,
+  explosiveCore: 69 / 96,
+  tractorDrone: 81 / 96,
+  miniBoss: 142 / 160
+};
 
 type HudElements = {
   hpBar: HTMLElement;
@@ -24,6 +61,12 @@ export class GameScene extends Phaser.Scene {
   private readonly sim = new OrbitPunchSimulation();
   private readonly hud: HudElements;
   private graphics!: Phaser.GameObjects.Graphics;
+  private overlayGraphics!: Phaser.GameObjects.Graphics;
+  private planetImage!: Phaser.GameObjects.Image;
+  private playerImage!: Phaser.GameObjects.Image;
+  private threatImages: Phaser.GameObjects.Image[] = [];
+  private punchImages: Phaser.GameObjects.Image[] = [];
+  private chainImages: Phaser.GameObjects.Image[] = [];
   private shakeTime = 0;
   private hitStop = 0;
   private hitLabels: Phaser.GameObjects.Text[] = [];
@@ -33,8 +76,29 @@ export class GameScene extends Phaser.Scene {
     this.hud = hud;
   }
 
+  public preload(): void {
+    this.load.image(PLANET_TEXTURE_KEY, PLANET_TEXTURE_URL);
+    this.load.image(PLAYER_TEXTURE_KEY, PLAYER_TEXTURE_URL);
+    this.load.image(PUNCH_TEXTURE_KEY, PUNCH_TEXTURE_URL);
+    this.load.image(CHAIN_TEXTURE_KEY, CHAIN_TEXTURE_URL);
+    for (const [kind, url] of Object.entries(THREAT_TEXTURE_URLS) as Array<[ThreatKind, string]>) {
+      this.load.image(THREAT_TEXTURE_KEYS[kind], url);
+    }
+  }
+
   public create(): void {
     this.graphics = this.add.graphics();
+    this.overlayGraphics = this.add.graphics().setDepth(6);
+    this.planetImage = this.add
+      .image(0, 0, PLANET_TEXTURE_KEY)
+      .setOrigin(0.5)
+      .setDepth(1)
+      .setVisible(false);
+    this.playerImage = this.add
+      .image(0, 0, PLAYER_TEXTURE_KEY)
+      .setOrigin(0.5)
+      .setDepth(5)
+      .setVisible(false);
 
     this.input.keyboard?.on("keydown-SPACE", (event: KeyboardEvent) => {
       if (!event.repeat) {
@@ -256,11 +320,12 @@ export class GameScene extends Phaser.Scene {
     this.updateCamera(dt);
 
     this.graphics.clear();
+    this.overlayGraphics.clear();
     this.drawStarfield();
     this.drawOrbit(snapshot);
     this.drawPlanet(snapshot);
     this.drawPunches(snapshot);
-    drawThreats(this.graphics, snapshot);
+    this.drawThreats(snapshot);
     this.drawPlayer(snapshot);
     this.drawSparks(snapshot);
   }
@@ -326,29 +391,210 @@ export class GameScene extends Phaser.Scene {
     this.graphics.lineStyle(2, palette.shield, 0.18 + hpRatio * 0.44);
     this.graphics.strokeCircle(world.center.x, world.center.y, world.planetRadius + 15);
 
-    this.graphics.fillStyle(palette.planetOcean, 1);
-    this.graphics.fillCircle(world.center.x, world.center.y, world.planetRadius);
-    this.graphics.fillStyle(palette.planetLand, 0.88);
-    this.graphics.fillEllipse(world.center.x - 18, world.center.y - 12, 58, 28);
-    this.graphics.fillEllipse(world.center.x + 23, world.center.y + 16, 46, 20);
-    this.graphics.fillStyle(0xffffff, 0.16);
-    this.graphics.fillCircle(world.center.x - 22, world.center.y - 24, 20);
+    const planetDisplaySize = (world.planetRadius * 2) / PLANET_VISIBLE_WIDTH_RATIO;
+    this.planetImage
+      .setVisible(true)
+      .setPosition(world.center.x, world.center.y)
+      .setDisplaySize(planetDisplaySize, planetDisplaySize);
 
     if (hpRatio < 0.35) {
-      this.graphics.lineStyle(2, palette.danger, 0.5);
-      this.graphics.beginPath();
-      this.graphics.moveTo(world.center.x - 24, world.center.y - 18);
-      this.graphics.lineTo(world.center.x + 12, world.center.y + 5);
-      this.graphics.lineTo(world.center.x - 8, world.center.y + 33);
-      this.graphics.strokePath();
+      this.overlayGraphics.lineStyle(2, palette.danger, 0.5);
+      this.overlayGraphics.beginPath();
+      this.overlayGraphics.moveTo(world.center.x - 24, world.center.y - 18);
+      this.overlayGraphics.lineTo(world.center.x + 12, world.center.y + 5);
+      this.overlayGraphics.lineTo(world.center.x - 8, world.center.y + 33);
+      this.overlayGraphics.strokePath();
     }
+  }
+
+  private drawThreats(snapshot: SimulationSnapshot): void {
+    this.drawTractorLinks(snapshot);
+    this.ensureImagePool(
+      this.threatImages,
+      snapshot.meteors.length,
+      THREAT_TEXTURE_KEYS.meteor,
+      2
+    );
+    this.hideImagePool(this.threatImages);
+
+    for (let i = 0; i < snapshot.meteors.length; i += 1) {
+      const meteor = snapshot.meteors[i];
+      if (!meteor.alive) {
+        continue;
+      }
+
+      this.drawThreatBackgroundEffects(meteor);
+      const image = this.threatImages[i];
+      image
+        .setVisible(true)
+        .setTexture(THREAT_TEXTURE_KEYS[meteor.kind])
+        .setPosition(meteor.pos.x, meteor.pos.y)
+        .setRotation(this.threatRotation(meteor))
+        .setDisplaySize(this.threatDisplaySize(meteor), this.threatDisplaySize(meteor))
+        .setAlpha(1);
+      this.applyThreatTint(image, meteor);
+      this.drawThreatForegroundEffects(meteor);
+    }
+  }
+
+  private drawThreatBackgroundEffects(meteor: Meteor): void {
+    if (meteor.kind === "meteor") {
+      const angle = Math.atan2(world.center.y - meteor.pos.y, world.center.x - meteor.pos.x);
+      this.graphics.lineStyle(1, meteor.knocked ? palette.punch : palette.danger, 0.18);
+      this.graphics.beginPath();
+      this.graphics.moveTo(meteor.pos.x, meteor.pos.y);
+      this.graphics.lineTo(
+        meteor.pos.x + Math.cos(angle) * 46,
+        meteor.pos.y + Math.sin(angle) * 46
+      );
+      this.graphics.strokePath();
+      this.graphics.fillStyle(meteor.knocked ? palette.punch : palette.meteorEdge, 0.22);
+      this.graphics.fillCircle(meteor.pos.x, meteor.pos.y, meteor.radius + 4);
+      return;
+    }
+
+    if (meteor.kind === "orbitalSatellite") {
+      this.graphics.lineStyle(1, meteor.knocked ? palette.punch : palette.orbitalPanel, 0.34);
+      this.graphics.strokeCircle(meteor.pos.x, meteor.pos.y, meteor.radius + 8);
+      return;
+    }
+
+    if (meteor.kind === "explosiveCore") {
+      const pulse = 0.5 + Math.sin(meteor.spin * 2.4) * 0.5;
+      this.graphics.fillStyle(palette.explosiveGlow, 0.18 + pulse * 0.18);
+      this.graphics.fillCircle(meteor.pos.x, meteor.pos.y, meteor.radius + 13 + pulse * 5);
+      this.graphics.lineStyle(2, meteor.knocked ? palette.punch : palette.explosiveCore, 0.52);
+      this.graphics.strokeCircle(meteor.pos.x, meteor.pos.y, meteor.radius + 8);
+      return;
+    }
+
+    if (meteor.kind === "tractorDrone") {
+      this.graphics.lineStyle(2, meteor.knocked ? palette.punch : palette.tractorDrone, 0.45);
+      this.graphics.strokeCircle(meteor.pos.x, meteor.pos.y, meteor.radius + 6);
+      return;
+    }
+
+    const hpRatio = Math.max(0, meteor.hp / meteor.maxHp);
+    this.graphics.fillStyle(palette.miniBoss, 0.18);
+    this.graphics.fillCircle(meteor.pos.x, meteor.pos.y, meteor.radius + 13);
+    this.graphics.lineStyle(3, palette.miniBoss, meteor.knocked ? 0.22 : 0.68);
+    this.graphics.strokeCircle(meteor.pos.x, meteor.pos.y, meteor.radius + 8);
+
+    this.overlayGraphics.lineStyle(5, 0x25143f, 0.82);
+    this.overlayGraphics.beginPath();
+    this.overlayGraphics.arc(meteor.pos.x, meteor.pos.y, meteor.radius + 15, -Math.PI / 2, Math.PI * 1.5);
+    this.overlayGraphics.strokePath();
+
+    this.overlayGraphics.lineStyle(5, palette.miniBossCore, 0.95);
+    this.overlayGraphics.beginPath();
+    this.overlayGraphics.arc(
+      meteor.pos.x,
+      meteor.pos.y,
+      meteor.radius + 15,
+      -Math.PI / 2,
+      -Math.PI / 2 + Math.PI * 2 * hpRatio
+    );
+    this.overlayGraphics.strokePath();
+  }
+
+  private drawThreatForegroundEffects(meteor: Meteor): void {
+    if (meteor.kind !== "explosiveCore") {
+      return;
+    }
+
+    this.overlayGraphics.lineStyle(3, 0xffffff, 0.5);
+    for (let i = 0; i < 3; i += 1) {
+      const angle = meteor.spin + (i * Math.PI * 2) / 3;
+      this.overlayGraphics.beginPath();
+      this.overlayGraphics.moveTo(meteor.pos.x, meteor.pos.y);
+      this.overlayGraphics.lineTo(
+        meteor.pos.x + Math.cos(angle) * meteor.radius * 0.9,
+        meteor.pos.y + Math.sin(angle) * meteor.radius * 0.9
+      );
+      this.overlayGraphics.strokePath();
+    }
+  }
+
+  private drawTractorLinks(snapshot: SimulationSnapshot): void {
+    for (const drone of snapshot.meteors) {
+      if (!drone.alive || drone.knocked || drone.kind !== "tractorDrone") {
+        continue;
+      }
+
+      this.graphics.lineStyle(1, palette.tractorBeam, 0.12);
+      this.graphics.strokeCircle(drone.pos.x, drone.pos.y, TRACTOR_RANGE);
+
+      for (const target of snapshot.meteors) {
+        if (target === drone || !target.alive || target.knocked || target.kind === "miniBoss") {
+          continue;
+        }
+        const distanceToTarget = Phaser.Math.Distance.Between(
+          drone.pos.x,
+          drone.pos.y,
+          target.pos.x,
+          target.pos.y
+        );
+        if (distanceToTarget > TRACTOR_RANGE) {
+          continue;
+        }
+
+        const alpha = 0.34 * (1 - distanceToTarget / TRACTOR_RANGE);
+        const toCenter = {
+          x: world.center.x - target.pos.x,
+          y: world.center.y - target.pos.y
+        };
+        const toCenterLength = Math.hypot(toCenter.x, toCenter.y) || 1;
+        const guideLength = Math.min(72, toCenterLength);
+        const guideEnd = {
+          x: target.pos.x + (toCenter.x / toCenterLength) * guideLength,
+          y: target.pos.y + (toCenter.y / toCenterLength) * guideLength
+        };
+
+        this.graphics.lineStyle(1, palette.tractorBeam, alpha * 0.55);
+        this.graphics.beginPath();
+        this.graphics.moveTo(drone.pos.x, drone.pos.y);
+        this.graphics.lineTo(target.pos.x, target.pos.y);
+        this.graphics.strokePath();
+
+        this.graphics.lineStyle(2, palette.tractorBeam, alpha);
+        this.graphics.beginPath();
+        this.graphics.moveTo(target.pos.x, target.pos.y);
+        this.graphics.lineTo(guideEnd.x, guideEnd.y);
+        this.graphics.strokePath();
+      }
+    }
+  }
+
+  private threatDisplaySize(meteor: Meteor): number {
+    const visibleWidth =
+      meteor.kind === "meteor"
+        ? (meteor.radius + 4) * 2
+        : meteor.kind === "orbitalSatellite"
+          ? meteor.radius * 3.2
+          : meteor.kind === "explosiveCore"
+            ? (meteor.radius + 18) * 2
+            : meteor.kind === "tractorDrone"
+              ? (meteor.radius + 10) * 2
+              : (meteor.radius + 15) * 2;
+    return visibleWidth / THREAT_VISIBLE_WIDTH_RATIOS[meteor.kind];
+  }
+
+  private threatRotation(meteor: Meteor): number {
+    return meteor.kind === "miniBoss" ? meteor.spin * 0.45 : meteor.spin;
+  }
+
+  private applyThreatTint(image: Phaser.GameObjects.Image, meteor: Meteor): void {
+    if (!meteor.knocked) {
+      image.clearTint();
+      return;
+    }
+
+    image.setTint(palette.punch);
   }
 
   private drawPlayer(snapshot: SimulationSnapshot): void {
     const pos = snapshot.playerPos;
     const angle = snapshot.playerAngle;
-    const noseX = pos.x + Math.cos(angle) * 22;
-    const noseY = pos.y + Math.sin(angle) * 22;
     const invulnerable = snapshot.satelliteInvulnerability > 0;
     const blinkAlpha = invulnerable
       ? Phaser.Math.Linear(0.34, 0.78, Math.sin(snapshot.satelliteInvulnerability * 32) * 0.5 + 0.5)
@@ -372,93 +618,59 @@ export class GameScene extends Phaser.Scene {
       this.graphics.fillCircle(pos.x, pos.y, chargeRadius + 3);
     }
 
-    this.graphics.fillStyle(palette.player, blinkAlpha);
-    this.graphics.fillCircle(pos.x, pos.y, 15);
-    this.graphics.fillStyle(palette.playerCore, blinkAlpha);
-    this.graphics.fillCircle(pos.x + Math.cos(angle) * 5, pos.y + Math.sin(angle) * 5, 5);
-    this.graphics.lineStyle(4, palette.player, 0.82 * blinkAlpha);
-    this.graphics.beginPath();
-    this.graphics.moveTo(pos.x, pos.y);
-    this.graphics.lineTo(noseX, noseY);
-    this.graphics.strokePath();
+    this.playerImage
+      .setVisible(true)
+      .setPosition(pos.x, pos.y)
+      .setRotation(angle)
+      .setDisplaySize(PLAYER_DISPLAY_SIZE, PLAYER_DISPLAY_SIZE)
+      .setAlpha(blinkAlpha);
   }
 
   private drawPunches(snapshot: SimulationSnapshot): void {
-    for (const punch of snapshot.punches) {
+    this.ensureImagePool(this.punchImages, snapshot.punches.length, PUNCH_TEXTURE_KEY, 4);
+    this.hideImagePool(this.punchImages);
+
+    const chainSegmentCount = snapshot.punches.reduce(
+      (count, punch) => count + Math.max(0, this.punchChainPoints(punch).length - 1),
+      0
+    );
+    this.ensureImagePool(this.chainImages, chainSegmentCount, CHAIN_TEXTURE_KEY, 3);
+    this.hideImagePool(this.chainImages);
+
+    let chainImageIndex = 0;
+    for (let punchIndex = 0; punchIndex < snapshot.punches.length; punchIndex += 1) {
+      const punch = snapshot.punches[punchIndex];
       const alpha = Math.max(0, punch.life / punch.maxLife);
       const angle = Math.atan2(punch.direction.y, punch.direction.x);
-      const wristX = punch.chainPoints.at(-1)?.x ?? punch.pos.x - punch.direction.x * 20;
-      const wristY = punch.chainPoints.at(-1)?.y ?? punch.pos.y - punch.direction.y * 20;
-      const sideX = Math.cos(angle + Math.PI / 2);
-      const sideY = Math.sin(angle + Math.PI / 2);
-      const chainPoints =
-        punch.chainPoints.length >= 2
-          ? punch.chainPoints
-          : [punch.origin, { x: wristX, y: wristY }];
+      const chainPoints = this.punchChainPoints(punch);
 
-      this.graphics.lineStyle(18, palette.punchShadow, 0.2 * alpha);
-      this.graphics.beginPath();
-      this.graphics.moveTo(chainPoints[0].x, chainPoints[0].y);
-      for (const point of chainPoints.slice(1)) {
-        this.graphics.lineTo(point.x, point.y);
-      }
-      this.graphics.strokePath();
-
-      this.graphics.lineStyle(7, palette.punch, 0.78 * alpha);
-      this.graphics.beginPath();
-      this.graphics.moveTo(chainPoints[0].x, chainPoints[0].y);
-      for (const point of chainPoints.slice(1)) {
-        this.graphics.lineTo(point.x, point.y);
-      }
-      this.graphics.strokePath();
-
-      this.graphics.fillStyle(palette.punch, 0.9 * alpha);
-      for (let i = 0; i < chainPoints.length; i += 1) {
-        const point = chainPoints[i];
-        const linkRadius = i === 0 || i === chainPoints.length - 1 ? 8 : 5.5;
-        this.graphics.fillCircle(point.x, point.y, linkRadius);
-        this.graphics.lineStyle(1, 0xffffff, 0.18 * alpha);
-        this.graphics.strokeCircle(point.x, point.y, linkRadius + 1.5);
+      for (let i = 0; i < chainPoints.length - 1; i += 1) {
+        const from = chainPoints[i];
+        const to = chainPoints[i + 1];
+        const segmentLength = Phaser.Math.Distance.Between(from.x, from.y, to.x, to.y);
+        const segmentAngle = Math.atan2(to.y - from.y, to.x - from.x);
+        const chainImage = this.chainImages[chainImageIndex];
+        chainImageIndex += 1;
+        chainImage
+          .setVisible(true)
+          .setPosition((from.x + to.x) * 0.5, (from.y + to.y) * 0.5)
+          .setRotation(segmentAngle)
+          .setDisplaySize(Math.max(24, segmentLength + CHAIN_LINK_PADDING), CHAIN_LINK_HEIGHT)
+          .setAlpha(0.88 * alpha);
       }
 
-      this.graphics.fillStyle(palette.punchGlove, 1 * alpha);
-      fillRotatedEllipse(
-        this.graphics,
-        punch.pos.x,
-        punch.pos.y,
-        punch.radius * (punch.charged ? 1.95 : 1.55),
-        punch.radius * (punch.charged ? 1.42 : 1.18),
-        angle
-      );
-      this.graphics.fillCircle(
-        punch.pos.x + punch.direction.x * 12,
-        punch.pos.y + punch.direction.y * 2,
-        punch.radius * 0.52
-      );
-
-      this.graphics.lineStyle(punch.charged ? 5 : 3, 0xfff6c4, 0.8 * alpha);
-      this.graphics.beginPath();
-      this.graphics.moveTo(
-        punch.pos.x + sideX * 4 - punch.direction.x * 5,
-        punch.pos.y + sideY * 4 - punch.direction.y * 5
-      );
-      this.graphics.lineTo(
-        punch.pos.x + sideX * 12 + punch.direction.x * 7,
-        punch.pos.y + sideY * 12 + punch.direction.y * 7
-      );
-      this.graphics.moveTo(
-        punch.pos.x - sideX * 4 - punch.direction.x * 5,
-        punch.pos.y - sideY * 4 - punch.direction.y * 5
-      );
-      this.graphics.lineTo(
-        punch.pos.x - sideX * 12 + punch.direction.x * 7,
-        punch.pos.y - sideY * 12 + punch.direction.y * 7
-      );
-      this.graphics.strokePath();
+      const targetVisibleWidth = punch.radius * 1.95;
+      const punchDisplaySize = targetVisibleWidth / PUNCH_VISIBLE_WIDTH_RATIO;
+      this.punchImages[punchIndex]
+        .setVisible(true)
+        .setPosition(punch.pos.x, punch.pos.y)
+        .setRotation(angle)
+        .setDisplaySize(punchDisplaySize, punchDisplaySize)
+        .setAlpha(alpha);
 
       if (punch.phase === "holding") {
-        this.graphics.lineStyle(punch.charged ? 4 : 2, 0xffffff, punch.charged ? 0.58 : 0.34);
-        this.graphics.strokeCircle(
+        this.overlayGraphics.lineStyle(punch.charged ? 4 : 2, 0xffffff, punch.charged ? 0.58 : 0.34);
+        this.overlayGraphics.strokeCircle(
           punch.pos.x,
           punch.pos.y,
           punch.radius + (punch.charged ? 16 : 11)
@@ -467,13 +679,48 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private punchChainPoints(punch: Punch): Vec2[] {
+    if (punch.chainPoints.length >= 2) {
+      return punch.chainPoints;
+    }
+
+    return [
+      punch.origin,
+      {
+        x: punch.pos.x - punch.direction.x * 20,
+        y: punch.pos.y - punch.direction.y * 20
+      }
+    ];
+  }
+
+  private ensureImagePool(
+    pool: Phaser.GameObjects.Image[],
+    count: number,
+    textureKey: string,
+    depth: number
+  ): void {
+    for (const image of pool) {
+      image.setDepth(depth);
+    }
+
+    while (pool.length < count) {
+      pool.push(this.add.image(0, 0, textureKey).setOrigin(0.5).setDepth(depth).setVisible(false));
+    }
+  }
+
+  private hideImagePool(pool: Phaser.GameObjects.Image[]): void {
+    for (const image of pool) {
+      image.setVisible(false);
+    }
+  }
+
   private drawSparks(snapshot: SimulationSnapshot): void {
     for (const spark of snapshot.sparks) {
       const alpha = Math.max(0, spark.life / spark.maxLife);
-      this.graphics.lineStyle(3, palette.player, alpha);
-      this.graphics.strokeCircle(spark.pos.x, spark.pos.y, 34 * (1 - alpha) + 6);
-      this.graphics.fillStyle(0xffffff, alpha);
-      this.graphics.fillCircle(spark.pos.x, spark.pos.y, 4 + 12 * (1 - alpha));
+      this.overlayGraphics.lineStyle(3, palette.player, alpha);
+      this.overlayGraphics.strokeCircle(spark.pos.x, spark.pos.y, 34 * (1 - alpha) + 6);
+      this.overlayGraphics.fillStyle(0xffffff, alpha);
+      this.overlayGraphics.fillCircle(spark.pos.x, spark.pos.y, 4 + 12 * (1 - alpha));
     }
   }
 }
