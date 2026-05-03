@@ -21,6 +21,11 @@ export type ChainAllocation = {
   rootId?: number;
 };
 
+export type ExplosionOptions = {
+  radius?: number;
+  speedBonus?: number;
+};
+
 export const planetDamage = (meteor: Meteor): number => {
   if (meteor.kind === "miniBoss") {
     return 38;
@@ -85,7 +90,8 @@ export const explodeCore = (
     chainRootId?: number
   ) => void,
   recoverShield: (chain: number) => number = () => 0,
-  allocateChain: () => ChainAllocation = () => ({ chainCount: chain + 1 })
+  allocateChain: () => ChainAllocation = () => ({ chainCount: chain + 1 }),
+  options: ExplosionOptions = {}
 ): ThreatEffectResult => {
   if (!core.alive) {
     return finish(state);
@@ -101,13 +107,18 @@ export const explodeCore = (
       continue;
     }
 
+    const explosionRadius = options.radius ?? EXPLOSION_RADIUS;
     const blastDistance = distance(core.pos, target.pos);
-    if (blastDistance > EXPLOSION_RADIUS + target.radius) {
+    if (blastDistance > explosionRadius + target.radius) {
       continue;
     }
 
     const direction = normalize({ x: target.pos.x - core.pos.x, y: target.pos.y - core.pos.y });
-    const blastSpeed = PUNCH_KNOCK_SPEED + 70 + Math.max(0, EXPLOSION_RADIUS - blastDistance) * 0.7;
+    const blastSpeed =
+      PUNCH_KNOCK_SPEED +
+      70 +
+      (options.speedBonus ?? 0) +
+      Math.max(0, explosionRadius - blastDistance) * 0.7;
     let nextChain = chain + 1;
     let shieldRecovery = 0;
     if (target.knocked) {

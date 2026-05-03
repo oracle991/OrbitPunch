@@ -1,6 +1,11 @@
 import { closestPointOnSegment, distance, length, normalize, radialPoint } from "./math";
 import { damageThreatByImpact, explodeCore, planetDamage } from "./threats/effects";
-import { CHAIN_KNOCK_SPEED, MINI_BOSS_HIT_COOLDOWN, PUNCH_KNOCK_SPEED } from "./threats/config";
+import {
+  CHAIN_KNOCK_SPEED,
+  EXPLOSION_RADIUS,
+  MINI_BOSS_HIT_COOLDOWN,
+  PUNCH_KNOCK_SPEED
+} from "./threats/config";
 import { applyTractorPull, updateThreat } from "./threats/update";
 import { spawnScheduledMiniBoss, spawnThreat } from "./threats/spawn";
 import {
@@ -10,6 +15,7 @@ import {
   scoreForThreat
 } from "./threats/waveConfig";
 import type {
+  ChainHit,
   HitSpark,
   Meteor,
   Punch,
@@ -17,6 +23,16 @@ import type {
   SimulationSnapshot,
   Vec2
 } from "./types";
+import {
+  createUpgradeLevels,
+  romanLevel,
+  upgradeConfig,
+  upgradeDefinitionById,
+  upgradeDefinitions,
+  type UpgradeChoice,
+  type UpgradeEffect,
+  type UpgradeId
+} from "./upgrades";
 import { CENTER, ORBIT_RADIUS, OUTER_RADIUS, PLANET_RADIUS, SATELLITE_RADIUS } from "./world";
 
 export type {
@@ -29,6 +45,7 @@ export type {
   ThreatKind,
   Vec2
 } from "./types";
+export type { UpgradeChoice, UpgradeId } from "./upgrades";
 export { world } from "./world";
 
 const PLAYER_ORBIT_SPEED = 1.95;
@@ -56,14 +73,11 @@ const SATELLITE_HIT_LOCKOUT = 1.35;
 const SATELLITE_INVULNERABILITY = 1.35;
 const PUNCH_CHAIN_RADIUS = 9;
 const MAX_PLANET_HP = 100;
-const PLANET_REPAIR_AMOUNT = 35;
 const CHAIN_SHIELD_RECOVERY = 4;
 const MAX_CHAIN_SHIELD_RECOVERY = 12;
 const MINI_BOSS_ENTRY_DELAY = 10;
 
 let nextId = 1;
-
-export type UpgradeId = "planetRepair";
 
 export class OrbitPunchSimulation {
   private playerAngle = -Math.PI / 2;
@@ -85,6 +99,11 @@ export class OrbitPunchSimulation {
   private miniBossSpawnTimer = Number.POSITIVE_INFINITY;
   private miniBossScheduledWave = 0;
   private planetHp = MAX_PLANET_HP;
+  private upgradeLevels = createUpgradeLevels();
+  private orbitalShieldCooldown = 0;
+  private overdriveTimer = 0;
+  private starburstCooldown = 0;
+  private twinPunchSide: -1 | 1 = 1;
   private gameOver = true;
 
   public start(): void {
@@ -108,6 +127,11 @@ export class OrbitPunchSimulation {
     this.miniBossScheduledWave = 0;
     this.scheduleMiniBossForCurrentWave();
     this.planetHp = MAX_PLANET_HP;
+    this.upgradeLevels = createUpgradeLevels();
+    this.orbitalShieldCooldown = 0;
+    this.overdriveTimer = 0;
+    this.starburstCooldown = 0;
+    this.twinPunchSide = 1;
     this.gameOver = false;
   }
 
@@ -140,7 +164,8 @@ export class OrbitPunchSimulation {
     }
 
     this.createPunch(charged);
-    this.cooldown = PUNCH_COOLDOWN;
+    this.createTwinPunch(charged);
+    this.cooldown = this.currentPunchCooldown();
     return { fired: true, charged };
   }
 
@@ -151,21 +176,61 @@ export class OrbitPunchSimulation {
     this.chargeCanceled = false;
   }
 
-  public applyUpgrade(upgradeId: UpgradeId): { recovered: number } {
-    if (upgradeId === "planetRepair") {
-      return { recovered: this.recoverPlanetHp(PLANET_REPAIR_AMOUNT) };
-    }
-
-    return { recovered: 0 };
+  public upgradeChoices(count = upgradeConfig.selectionCount): UpgradeChoice[] {
+    return upgradeDefinitions
+      .filter((definition) => this.canSelectUpgrade(definition.id))
+      .map((definition, index) => ({
+        definition,
+        sort: this.upgradeSortValue(index)
+      }))
+      .sort((first, second) => first.sort - second.sort)
+      .slice(0, count)
+      .map(({ definition }) => this.toUpgradeChoice(definition.id));
   }
 
-  private createPunch(charged: boolean): void {
-    const speedMultiplier = charged ? CHARGE_PUNCH_SPEED_MULTIPLIER : 1;
-    const damageMultiplier = charged ? CHARGE_PUNCH_DAMAGE_MULTIPLIER : 1;
-    const origin = radialPoint(this.playerAngle, ORBIT_RADIUS + 21);
+  public applyUpgrade(upgradeId: UpgradeId): { applied: boolean; recovered: number } {
+    if (!this.canSelectUpgrade(upgradeId)) {
+      return { applied: false, recovered: 0 };
+    }
+
+    const definition = upgradeDefinitionById(upgradeId);
+    if (!definition) {
+      return { applied: false, recovered: 0 };
+    }
+
+    if (definition.kind === "instant") {
+      return {
+        applied: true,
+        recovered: this.recoverPlanetHp(this.effectValue(upgradeId, "recovery"))
+      };
+    }
+
+    this.upgradeLevels[upgradeId] = Math.min(
+      definition.maxLevel,
+      this.upgradeLevels[upgradeId] + 1
+    );
+    return { applied: true, recovered: 0 };
+  }
+
+  private createPunch(
+    charged: boolean,
+    angle = this.playerAngle,
+    options: {
+      rangeMultiplier?: number;
+      radiusMultiplier?: number;
+      damageMultiplier?: number;
+      knockSpeedMultiplier?: number;
+    } = {}
+  ): void {
+    const speedMultiplier =
+      (charged ? CHARGE_PUNCH_SPEED_MULTIPLIER : 1) * this.currentPunchSpeedMultiplier();
+    const damageMultiplier =
+      (charged ? CHARGE_PUNCH_DAMAGE_MULTIPLIER : 1) * (options.damageMultiplier ?? 1);
+    const origin = radialPoint(angle, ORBIT_RADIUS + 21);
     const direction = normalize({ x: origin.x - CENTER.x, y: origin.y - CENTER.y });
     this.punches.push({
       id: nextId++,
+      orbitAngleOffset: angle - this.playerAngle,
       origin,
       pos: origin,
       vel: {
@@ -175,18 +240,36 @@ export class OrbitPunchSimulation {
       direction,
       chainPoints: Array.from({ length: PUNCH_CHAIN_SEGMENTS }, () => ({ ...origin })),
       chainTime: 0,
-      radius: 18,
+      radius: this.currentPunchRadius() * (options.radiusMultiplier ?? 1),
       distance: 0,
-      maxDistance: PUNCH_RANGE,
+      maxDistance: this.currentPunchRange() * (options.rangeMultiplier ?? 1),
       hold: PUNCH_HOLD_TIME,
       life: 1,
       maxLife: 1,
       extendSpeed: PUNCH_EXTEND_SPEED * speedMultiplier,
       returnSpeed: PUNCH_RETURN_SPEED * speedMultiplier,
       damageMultiplier,
-      knockSpeedMultiplier: speedMultiplier,
+      knockSpeedMultiplier:
+        speedMultiplier * this.currentKnockSpeedMultiplier() * (options.knockSpeedMultiplier ?? 1),
       charged,
       phase: "extending"
+    });
+  }
+
+  private createTwinPunch(charged: boolean): void {
+    if (!this.hasUpgrade("twinPunch")) {
+      return;
+    }
+
+    const effect = this.currentUpgradeEffect("twinPunch");
+    const angleOffset =
+      ((effect.angleOffsetDegrees ?? 0) * Math.PI * this.twinPunchSide) / 180;
+    this.twinPunchSide = this.twinPunchSide === 1 ? -1 : 1;
+    this.createPunch(charged, this.playerAngle + angleOffset, {
+      rangeMultiplier: effect.rangeMultiplier,
+      radiusMultiplier: effect.radiusMultiplier,
+      damageMultiplier: effect.damageMultiplier,
+      knockSpeedMultiplier: effect.knockSpeedMultiplier
     });
   }
 
@@ -206,10 +289,15 @@ export class OrbitPunchSimulation {
     this.updateCharge(dt);
     const isCharging = this.chargeActive && !this.chargeCanceled;
     const orbitSpeed =
-      PLAYER_ORBIT_SPEED * (isCharging ? CHARGE_ORBIT_SPEED_MULTIPLIER : 1);
+      PLAYER_ORBIT_SPEED *
+      this.currentOrbitSpeedMultiplier() *
+      (isCharging ? CHARGE_ORBIT_SPEED_MULTIPLIER : 1);
     this.playerAngle += orbitSpeed * dt;
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.satelliteInvulnerability = Math.max(0, this.satelliteInvulnerability - dt);
+    this.orbitalShieldCooldown = Math.max(0, this.orbitalShieldCooldown - dt);
+    this.overdriveTimer = Math.max(0, this.overdriveTimer - dt);
+    this.starburstCooldown = Math.max(0, this.starburstCooldown - dt);
     this.spawnTimer -= dt;
     this.miniBossSpawnTimer -= dt;
 
@@ -240,6 +328,7 @@ export class OrbitPunchSimulation {
 
     for (const meteor of this.meteors) {
       updateThreat(meteor, dt);
+      this.applyHomingKnockback(meteor, dt);
       meteor.spin += dt * 4;
       meteor.hitCooldown = Math.max(0, (meteor.hitCooldown ?? 0) - dt);
     }
@@ -289,7 +378,10 @@ export class OrbitPunchSimulation {
       planetHp: this.planetHp,
       maxPlanetHp: MAX_PLANET_HP,
       cooldown: this.cooldown,
-      cooldownMax: this.cooldown > PUNCH_COOLDOWN ? SATELLITE_HIT_LOCKOUT : PUNCH_COOLDOWN,
+      cooldownMax:
+        this.cooldown > this.currentPunchCooldown()
+          ? this.currentSatelliteHitLockout()
+          : this.currentPunchCooldown(),
       charge: {
         held: this.fireHeld,
         active: this.chargeActive,
@@ -313,9 +405,11 @@ export class OrbitPunchSimulation {
   }
 
   private updatePunches(dt: number): void {
-    const currentOrigin = radialPoint(this.playerAngle, ORBIT_RADIUS + 21);
-
     for (const punch of this.punches) {
+      const currentOrigin = radialPoint(
+        this.playerAngle + punch.orbitAngleOffset,
+        ORBIT_RADIUS + 21
+      );
       punch.origin = { ...currentOrigin };
       punch.chainTime += dt;
 
@@ -559,11 +653,12 @@ export class OrbitPunchSimulation {
   private hitThreat(meteor: Meteor, punch: Punch, direction?: Vec2): void {
     const outward = normalize({ x: meteor.pos.x - CENTER.x, y: meteor.pos.y - CENTER.y });
     const hitDirection = direction ?? outward;
+    const perfectTiming = this.perfectTimingBonus(punch);
     if (meteor.kind === "miniBoss") {
       this.damageMiniBoss(
         meteor,
-        punch.damageMultiplier,
-        55 + this.wave * 12,
+        punch.damageMultiplier + perfectTiming.miniBossDamageBonus,
+        55 + this.wave * 12 + perfectTiming.scoreBonus,
         MINI_BOSS_HIT_COOLDOWN
       );
       punch.phase = "returning";
@@ -573,7 +668,10 @@ export class OrbitPunchSimulation {
     this.knockMeteor(
       meteor,
       hitDirection,
-      (PUNCH_KNOCK_SPEED + this.wave * 18) * punch.knockSpeedMultiplier
+      (PUNCH_KNOCK_SPEED + this.wave * 18) *
+        punch.knockSpeedMultiplier *
+        perfectTiming.knockSpeedMultiplier,
+      perfectTiming.scoreBonus
     );
   }
 
@@ -590,7 +688,12 @@ export class OrbitPunchSimulation {
           continue;
         }
 
-        const minDistance = first.radius + second.radius;
+        const minDistance =
+          first.radius +
+          second.radius +
+          (first.knocked || second.knocked
+            ? this.effectValue("chainMagnet", "chainCollisionBonus")
+            : 0);
         const actualDistance = distance(first.pos, second.pos);
         if (actualDistance > minDistance) {
           continue;
@@ -624,11 +727,12 @@ export class OrbitPunchSimulation {
           );
           this.damageByImpact(target, normal, transferredSpeed, 140, chainCount, rootId);
           const shieldRecovery = this.recoverPlanetShield(chainCount);
-          events.chainHits.push({
-            pos: this.impactPoint(source, target, normal),
-            count: chainCount,
+          this.addChainHit(
+            events,
+            this.impactPoint(source, target, normal),
+            chainCount,
             shieldRecovery
-          });
+          );
           source.vel.x *= 0.9;
           source.vel.y *= 0.9;
           events.hit = true;
@@ -687,6 +791,8 @@ export class OrbitPunchSimulation {
   private applyExplosion(core: Meteor, events: SimulationEvents, chain: number): void {
     const state = this.effectState();
     const rootId = core.knocked ? this.chainRootIdFor(core) : core.id;
+    const chainEventStart = events.chainHits.length;
+    const resonance = this.currentUpgradeEffect("explosiveCoreResonance");
     this.chainTreeSizes.set(rootId, Math.max(this.chainTreeSizeForRoot(rootId), chain));
     const result = explodeCore(
       core,
@@ -708,11 +814,18 @@ export class OrbitPunchSimulation {
       () => {
         const chainCount = this.extendChainTreeFromRoot(rootId, chain);
         return { chainCount, rootId };
+      },
+      {
+        radius: this.explosionRadius(resonance),
+        speedBonus: resonance.explosionSpeedBonus
       }
     );
     this.defeated = result.defeated;
     this.score = result.score;
     this.updateWave(result.wave);
+    for (const chainHit of events.chainHits.slice(chainEventStart)) {
+      this.applyChainUpgradeTriggers(chainHit.pos, chainHit.count, events);
+    }
   }
 
   private resolveSatelliteImpacts(events: SimulationEvents): void {
@@ -741,10 +854,8 @@ export class OrbitPunchSimulation {
       });
       const knockDirection = length(direction) > 0.001 ? direction : fallbackDirection;
       if (meteor.kind === "miniBoss") {
-        this.cancelCharge();
         this.damageMiniBoss(meteor, 1, 45 + this.wave * 10, MINI_BOSS_HIT_COOLDOWN);
-        this.cooldown = Math.max(this.cooldown, SATELLITE_HIT_LOCKOUT);
-        this.satelliteInvulnerability = SATELLITE_INVULNERABILITY;
+        this.applySatelliteContactPenalty(playerPos);
         events.hit = true;
         events.satelliteHit = true;
         continue;
@@ -755,8 +866,7 @@ export class OrbitPunchSimulation {
       meteor.pos.x += knockDirection.x * overlap;
       meteor.pos.y += knockDirection.y * overlap;
       this.deflectMeteor(meteor, knockDirection, SATELLITE_KNOCK_SPEED + this.wave * 14);
-      this.cooldown = Math.max(this.cooldown, SATELLITE_HIT_LOCKOUT);
-      this.satelliteInvulnerability = SATELLITE_INVULNERABILITY;
+      this.applySatelliteContactPenalty(playerPos);
       events.hit = true;
       events.satelliteHit = true;
     }
@@ -901,7 +1011,10 @@ export class OrbitPunchSimulation {
       return 0;
     }
 
-    const recovery = Math.min(MAX_CHAIN_SHIELD_RECOVERY, CHAIN_SHIELD_RECOVERY + chain);
+    const recovery = Math.min(
+      MAX_CHAIN_SHIELD_RECOVERY + this.effectValue("shieldSiphon", "chainRecoveryMaxBonus"),
+      CHAIN_SHIELD_RECOVERY + chain + this.effectValue("shieldSiphon", "chainRecoveryBonus")
+    );
     return this.recoverPlanetHp(recovery);
   }
 
@@ -934,6 +1047,341 @@ export class OrbitPunchSimulation {
       this.sparks.push({ pos: { ...meteor.pos }, life: 0.3, maxLife: 0.3 });
       events.planetHit = true;
     }
+  }
+
+  private canSelectUpgrade(upgradeId: UpgradeId): boolean {
+    const definition = upgradeDefinitionById(upgradeId);
+    if (!definition) {
+      return false;
+    }
+
+    if (definition.kind === "instant") {
+      return true;
+    }
+
+    return this.upgradeLevels[upgradeId] < definition.maxLevel;
+  }
+
+  private upgradeSortValue(index: number): number {
+    const seed =
+      Math.sin(
+        (this.wave + 1) * 12.9898 +
+          (this.defeated + 1) * 78.233 +
+          (this.score + 1) * 0.00037 +
+          index * 37.719
+      ) * 43758.5453;
+    return seed - Math.floor(seed);
+  }
+
+  private toUpgradeChoice(upgradeId: UpgradeId): UpgradeChoice {
+    const definition = upgradeDefinitionById(upgradeId);
+    if (!definition) {
+      throw new Error(`Unknown upgrade: ${upgradeId}`);
+    }
+
+    const level =
+      definition.kind === "multi"
+        ? this.upgradeLevels[upgradeId] + 1
+        : definition.kind === "single"
+          ? 1
+          : 0;
+    const descriptionIndex = Math.max(0, level - 1);
+    return {
+      id: definition.id,
+      name: definition.name,
+      title:
+        definition.kind === "multi"
+          ? `${definition.name} ${romanLevel(level)}`
+          : definition.name,
+      description: definition.descriptions[descriptionIndex] ?? definition.descriptions[0] ?? "",
+      kind: definition.kind,
+      level,
+      maxLevel: definition.maxLevel
+    };
+  }
+
+  private currentUpgradeEffect(upgradeId: UpgradeId): UpgradeEffect {
+    const definition = upgradeDefinitionById(upgradeId);
+    if (!definition) {
+      return {};
+    }
+
+    if (definition.kind === "instant") {
+      return definition.effect ?? {};
+    }
+
+    const level = this.upgradeLevels[upgradeId];
+    if (level <= 0) {
+      return {};
+    }
+
+    if (definition.kind === "multi") {
+      return definition.effects?.[level - 1] ?? {};
+    }
+
+    return definition.effect ?? {};
+  }
+
+  private effectValue(upgradeId: UpgradeId, key: string, fallback = 0): number {
+    return this.currentUpgradeEffect(upgradeId)[key] ?? fallback;
+  }
+
+  private hasUpgrade(upgradeId: UpgradeId): boolean {
+    return this.upgradeLevels[upgradeId] > 0;
+  }
+
+  private currentOrbitSpeedMultiplier(): number {
+    return (
+      this.effectValue("orbitalAcceleration", "orbitSpeedMultiplier", 1) *
+      (this.isEmergencyBoostActive()
+        ? this.effectValue("emergencyBoost", "orbitSpeedMultiplier", 1)
+        : 1)
+    );
+  }
+
+  private currentPunchCooldown(): number {
+    return Math.max(
+      0.16,
+      PUNCH_COOLDOWN *
+        this.effectValue("quickPunch", "cooldownMultiplier", 1) *
+        (this.isEmergencyBoostActive()
+          ? this.effectValue("emergencyBoost", "cooldownMultiplier", 1)
+          : 1) *
+        (this.isOverdriveActive() ? this.effectValue("overdrive", "cooldownMultiplier", 1) : 1)
+    );
+  }
+
+  private currentPunchRange(): number {
+    return (
+      PUNCH_RANGE +
+      this.effectValue("longArm", "punchRangeBonus") +
+      (this.isEmergencyBoostActive() ? this.effectValue("emergencyBoost", "punchRangeBonus") : 0)
+    );
+  }
+
+  private currentPunchRadius(): number {
+    return (
+      18 +
+      this.effectValue("wideGlove", "punchRadiusBonus") +
+      (this.isOverdriveActive() ? this.effectValue("overdrive", "punchRadiusBonus") : 0)
+    );
+  }
+
+  private currentPunchSpeedMultiplier(): number {
+    return (
+      (this.isEmergencyBoostActive()
+        ? this.effectValue("emergencyBoost", "punchSpeedMultiplier", 1)
+        : 1) *
+      (this.isOverdriveActive() ? this.effectValue("overdrive", "punchSpeedMultiplier", 1) : 1)
+    );
+  }
+
+  private currentKnockSpeedMultiplier(): number {
+    return this.isOverdriveActive() ? this.effectValue("overdrive", "knockSpeedMultiplier", 1) : 1;
+  }
+
+  private currentSatelliteHitLockout(): number {
+    return (
+      SATELLITE_HIT_LOCKOUT *
+      this.effectValue("recoverySystem", "satelliteLockoutMultiplier", 1)
+    );
+  }
+
+  private currentSatelliteInvulnerability(): number {
+    return (
+      SATELLITE_INVULNERABILITY *
+      this.effectValue("recoverySystem", "satelliteInvulnerabilityMultiplier", 1)
+    );
+  }
+
+  private isEmergencyBoostActive(): boolean {
+    const threshold = this.effectValue("emergencyBoost", "hpThreshold");
+    return this.hasUpgrade("emergencyBoost") && this.planetHp / MAX_PLANET_HP <= threshold;
+  }
+
+  private isOverdriveActive(): boolean {
+    return this.overdriveTimer > 0;
+  }
+
+  private perfectTimingBonus(
+    punch: Punch
+  ): { knockSpeedMultiplier: number; scoreBonus: number; miniBossDamageBonus: number } {
+    if (!this.hasUpgrade("perfectTiming")) {
+      return { knockSpeedMultiplier: 1, scoreBonus: 0, miniBossDamageBonus: 0 };
+    }
+
+    const effect = this.currentUpgradeEffect("perfectTiming");
+    const distanceRatio = punch.maxDistance > 0 ? punch.distance / punch.maxDistance : 0;
+    if (distanceRatio < (effect.distanceThreshold ?? 1)) {
+      return { knockSpeedMultiplier: 1, scoreBonus: 0, miniBossDamageBonus: 0 };
+    }
+
+    return {
+      knockSpeedMultiplier: effect.knockSpeedMultiplier ?? 1,
+      scoreBonus: effect.scoreBonus ?? 0,
+      miniBossDamageBonus: effect.miniBossDamageBonus ?? 0
+    };
+  }
+
+  private applySatelliteContactPenalty(playerPos: Vec2): void {
+    const shieldReady = this.hasUpgrade("orbitalShield") && this.orbitalShieldCooldown <= 0;
+    if (!shieldReady) {
+      this.cancelCharge();
+      this.cooldown = Math.max(this.cooldown, this.currentSatelliteHitLockout());
+      this.satelliteInvulnerability = this.currentSatelliteInvulnerability();
+      return;
+    }
+
+    const effect = this.currentUpgradeEffect("orbitalShield");
+    this.orbitalShieldCooldown = effect.shieldCooldown ?? 0;
+    this.cooldown = Math.max(this.cooldown, effect.lockoutWhenAbsorbed ?? 0);
+    this.satelliteInvulnerability = Math.max(
+      this.satelliteInvulnerability,
+      effect.invulnerabilityWhenAbsorbed ?? 0
+    );
+    this.sparks.push({ pos: { ...playerPos }, life: 0.32, maxLife: 0.32 });
+  }
+
+  private applyHomingKnockback(meteor: Meteor, dt: number): void {
+    if (!meteor.alive || !meteor.knocked || !this.hasUpgrade("homingKnockback")) {
+      return;
+    }
+
+    const effect = this.currentUpgradeEffect("homingKnockback");
+    const range = effect.homingRange ?? 0;
+    const strength = effect.homingStrength ?? 0;
+    const speed = length(meteor.vel);
+    if (range <= 0 || strength <= 0 || speed <= 0.001) {
+      return;
+    }
+
+    let nearest: Meteor | undefined;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    for (const target of this.meteors) {
+      if (!target.alive || target === meteor || target.knocked) {
+        continue;
+      }
+
+      const targetDistance = distance(meteor.pos, target.pos);
+      if (targetDistance <= range && targetDistance < nearestDistance) {
+        nearest = target;
+        nearestDistance = targetDistance;
+      }
+    }
+
+    if (!nearest) {
+      return;
+    }
+
+    const desired = normalize({
+      x: nearest.pos.x - meteor.pos.x,
+      y: nearest.pos.y - meteor.pos.y
+    });
+    const steer = Math.min(1, (strength * dt) / speed);
+    const nextDirection = normalize({
+      x: meteor.vel.x * (1 - steer) + desired.x * speed * steer,
+      y: meteor.vel.y * (1 - steer) + desired.y * speed * steer
+    });
+    meteor.vel.x = nextDirection.x * speed;
+    meteor.vel.y = nextDirection.y * speed;
+  }
+
+  private addChainHit(
+    events: SimulationEvents,
+    pos: Vec2,
+    count: number,
+    shieldRecovery?: number,
+    allowStarburst = true
+  ): void {
+    const chainHit: ChainHit = { pos, count, shieldRecovery };
+    events.chainHits.push(chainHit);
+    this.applyChainUpgradeTriggers(pos, count, events, allowStarburst);
+  }
+
+  private applyChainUpgradeTriggers(
+    pos: Vec2,
+    chain: number,
+    events: SimulationEvents,
+    allowStarburst = true
+  ): void {
+    this.applyPunchReload();
+    this.triggerOverdrive(chain);
+    if (allowStarburst) {
+      this.triggerStarburst(pos, chain, events);
+    }
+  }
+
+  private applyPunchReload(): void {
+    this.cooldown = Math.max(
+      0,
+      this.cooldown - this.effectValue("punchReload", "cooldownRecovery")
+    );
+  }
+
+  private triggerOverdrive(chain: number): void {
+    if (
+      !this.hasUpgrade("overdrive") ||
+      chain < this.effectValue("overdrive", "chainThreshold", Number.POSITIVE_INFINITY)
+    ) {
+      return;
+    }
+
+    this.overdriveTimer = Math.max(this.overdriveTimer, this.effectValue("overdrive", "duration"));
+  }
+
+  private triggerStarburst(pos: Vec2, chain: number, events: SimulationEvents): void {
+    if (
+      !this.hasUpgrade("starburst") ||
+      this.starburstCooldown > 0 ||
+      chain < this.effectValue("starburst", "chainThreshold", Number.POSITIVE_INFINITY)
+    ) {
+      return;
+    }
+
+    const effect = this.currentUpgradeEffect("starburst");
+    const radius = effect.radius ?? 0;
+    const knockSpeed = effect.knockSpeed ?? 0;
+    if (radius <= 0 || knockSpeed <= 0) {
+      return;
+    }
+
+    this.starburstCooldown = effect.cooldown ?? 0;
+    this.sparks.push({ pos: { ...pos }, life: 0.38, maxLife: 0.38 });
+    for (const meteor of this.meteors) {
+      if (!meteor.alive || meteor.knocked || distance(pos, meteor.pos) > radius + meteor.radius) {
+        continue;
+      }
+
+      const direction = normalize({
+        x: meteor.pos.x - pos.x,
+        y: meteor.pos.y - pos.y
+      });
+      const fallbackDirection = normalize({
+        x: meteor.pos.x - CENTER.x,
+        y: meteor.pos.y - CENTER.y
+      });
+      const nextChain = chain + 1;
+      this.damageByImpact(
+        meteor,
+        length(direction) > 0.001 ? direction : fallbackDirection,
+        knockSpeed,
+        effect.scoreBonus ?? 0,
+        nextChain,
+        meteor.id
+      );
+      this.addChainHit(
+        events,
+        { ...meteor.pos },
+        nextChain,
+        this.recoverPlanetShield(nextChain),
+        false
+      );
+      events.hit = true;
+    }
+  }
+
+  private explosionRadius(effect: UpgradeEffect): number {
+    return EXPLOSION_RADIUS + (effect.explosionRadiusBonus ?? 0);
   }
 
   private effectState() {

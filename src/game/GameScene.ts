@@ -3,6 +3,7 @@ import {
   OrbitPunchSimulation,
   type ChainHit,
   type SimulationSnapshot,
+  type UpgradeChoice,
   type UpgradeId
 } from "./simulation";
 import { palette } from "./rendering/palette";
@@ -166,27 +167,16 @@ export class GameScene extends Phaser.Scene {
 
     const panel = this.hud.overlay.querySelector(".panel");
     if (panel) {
+      const choices = this.sim.upgradeChoices(3);
+      const gridClass =
+        choices.length === 1 ? "upgrade-grid upgrade-grid-single" : "upgrade-grid";
       panel.classList.add("upgrade-panel");
       panel.innerHTML = `
         <p class="kicker">Satellite Upgrade</p>
         <h1>Wave ${wave}</h1>
         <p class="summary">Choose one upgrade to continue.</p>
-        <div class="upgrade-grid upgrade-grid-single" role="list" aria-label="Upgrade choices">
-          <button class="upgrade-choice" type="button" data-upgrade-id="planetRepair" role="listitem">
-            <span class="upgrade-art" aria-hidden="true"></span>
-            <span class="upgrade-name">惑星修復</span>
-            <span class="upgrade-description">惑星HPを即時に35回復する。最大値を超えては回復しない。</span>
-          </button>
-          <button class="upgrade-choice" type="button" data-upgrade-choice="2" role="listitem" hidden disabled>
-            <span class="upgrade-art" aria-hidden="true"></span>
-            <span class="upgrade-name">Upgrade 2</span>
-            <span class="upgrade-description">Upgrade details will appear here.</span>
-          </button>
-          <button class="upgrade-choice" type="button" data-upgrade-choice="3" role="listitem" hidden disabled>
-            <span class="upgrade-art" aria-hidden="true"></span>
-            <span class="upgrade-name">Upgrade 3</span>
-            <span class="upgrade-description">Upgrade details will appear here.</span>
-          </button>
+        <div class="${gridClass}" role="list" aria-label="Upgrade choices">
+          ${choices.map((choice) => this.upgradeChoiceHtml(choice)).join("")}
         </div>
       `;
 
@@ -200,6 +190,16 @@ export class GameScene extends Phaser.Scene {
       }
     }
     this.hud.overlay.classList.remove("hidden");
+  }
+
+  private upgradeChoiceHtml(choice: UpgradeChoice): string {
+    return `
+      <button class="upgrade-choice" type="button" data-upgrade-id="${choice.id}" role="listitem">
+        <span class="upgrade-art" aria-hidden="true"></span>
+        <span class="upgrade-name">${choice.title}</span>
+        <span class="upgrade-description">${choice.description}</span>
+      </button>
+    `;
   }
 
   private spawnHitLabel(chainHit: ChainHit): void {

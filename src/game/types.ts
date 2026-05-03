@@ -40,6 +40,7 @@ export type Meteor = {
 
 export type Punch = {
   id: number;
+  orbitAngleOffset: number;
   origin: Vec2;
   pos: Vec2;
   vel: Vec2;

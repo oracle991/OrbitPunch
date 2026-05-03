@@ -1,0 +1,253 @@
+{
+  "selectionCount": 3,
+  "upgrades": [
+    {
+      "id": "orbitalAcceleration",
+      "name": "軌道加速",
+      "kind": "multi",
+      "maxLevel": 3,
+      "descriptions": [
+        "自機衛星の周回速度を12%上げる。",
+        "自機衛星の周回速度を24%上げる。",
+        "自機衛星の周回速度を38%上げる。"
+      ],
+      "effects": [
+        { "orbitSpeedMultiplier": 1.12 },
+        { "orbitSpeedMultiplier": 1.24 },
+        { "orbitSpeedMultiplier": 1.38 }
+      ]
+    },
+    {
+      "id": "longArm",
+      "name": "ロングアーム",
+      "kind": "multi",
+      "maxLevel": 3,
+      "descriptions": [
+        "パンチ射程を24伸ばす。",
+        "パンチ射程を48伸ばす。",
+        "パンチ射程を76伸ばす。"
+      ],
+      "effects": [
+        { "punchRangeBonus": 24 },
+        { "punchRangeBonus": 48 },
+        { "punchRangeBonus": 76 }
+      ]
+    },
+    {
+      "id": "quickPunch",
+      "name": "クイックパンチ",
+      "kind": "multi",
+      "maxLevel": 3,
+      "descriptions": [
+        "パンチクールダウンを10%短縮する。",
+        "パンチクールダウンを20%短縮する。",
+        "パンチクールダウンを32%短縮する。"
+      ],
+      "effects": [
+        { "cooldownMultiplier": 0.9 },
+        { "cooldownMultiplier": 0.8 },
+        { "cooldownMultiplier": 0.68 }
+      ]
+    },
+    {
+      "id": "recoverySystem",
+      "name": "リカバリーシステム",
+      "kind": "multi",
+      "maxLevel": 2,
+      "descriptions": [
+        "自機接触時のロックアウトを22%、無敵時間を18%短縮する。",
+        "自機接触時のロックアウトを42%、無敵時間を35%短縮する。"
+      ],
+      "effects": [
+        { "satelliteLockoutMultiplier": 0.78, "satelliteInvulnerabilityMultiplier": 0.82 },
+        { "satelliteLockoutMultiplier": 0.58, "satelliteInvulnerabilityMultiplier": 0.65 }
+      ]
+    },
+    {
+      "id": "homingKnockback",
+      "name": "誘導ノックバック",
+      "kind": "single",
+      "maxLevel": 1,
+      "descriptions": [
+        "弾き返した脅威が近くの別脅威へ少し曲がる。"
+      ],
+      "effect": { "homingStrength": 160, "homingRange": 230 }
+    },
+    {
+      "id": "chainMagnet",
+      "name": "チェーンマグネット",
+      "kind": "multi",
+      "maxLevel": 2,
+      "descriptions": [
+        "ノックバック中の脅威のチェーン接触判定を8広げる。",
+        "ノックバック中の脅威のチェーン接触判定を15広げる。"
+      ],
+      "effects": [
+        { "chainCollisionBonus": 8 },
+        { "chainCollisionBonus": 15 }
+      ]
+    },
+    {
+      "id": "shieldSiphon",
+      "name": "シールドサイフォン",
+      "kind": "multi",
+      "maxLevel": 3,
+      "descriptions": [
+        "チェーン衝突時の惑星HP回復量を3、上限を8増やす。",
+        "チェーン衝突時の惑星HP回復量を6、上限を14増やす。",
+        "チェーン衝突時の惑星HP回復量を10、上限を22増やす。"
+      ],
+      "effects": [
+        { "chainRecoveryBonus": 3, "chainRecoveryMaxBonus": 8 },
+        { "chainRecoveryBonus": 6, "chainRecoveryMaxBonus": 14 },
+        { "chainRecoveryBonus": 10, "chainRecoveryMaxBonus": 22 }
+      ]
+    },
+    {
+      "id": "explosiveCoreResonance",
+      "name": "爆発コア共鳴",
+      "kind": "multi",
+      "maxLevel": 2,
+      "descriptions": [
+        "爆発コアの爆風半径を34、爆風速度を45上げる。",
+        "爆発コアの爆風半径を62、爆風速度を80上げる。"
+      ],
+      "effects": [
+        { "explosionRadiusBonus": 34, "explosionSpeedBonus": 45 },
+        { "explosionRadiusBonus": 62, "explosionSpeedBonus": 80 }
+      ]
+    },
+    {
+      "id": "wideGlove",
+      "name": "ワイドグローブ",
+      "kind": "multi",
+      "maxLevel": 2,
+      "descriptions": [
+        "パンチ先端の判定半径を5広げる。",
+        "パンチ先端の判定半径を9広げる。"
+      ],
+      "effects": [
+        { "punchRadiusBonus": 5 },
+        { "punchRadiusBonus": 9 }
+      ]
+    },
+    {
+      "id": "perfectTiming",
+      "name": "パーフェクトタイミング",
+      "kind": "single",
+      "maxLevel": 1,
+      "descriptions": [
+        "最大射程付近で命中させるとノックバックとスコアにボーナスを得る。"
+      ],
+      "effect": {
+        "distanceThreshold": 0.82,
+        "knockSpeedMultiplier": 1.28,
+        "scoreBonus": 180,
+        "miniBossDamageBonus": 1
+      }
+    },
+    {
+      "id": "orbitalShield",
+      "name": "軌道シールド",
+      "kind": "single",
+      "maxLevel": 1,
+      "descriptions": [
+        "一定間隔で自機接触時のロックアウトと無敵時間を軽減する。"
+      ],
+      "effect": {
+        "shieldCooldown": 8,
+        "lockoutWhenAbsorbed": 0.42,
+        "invulnerabilityWhenAbsorbed": 0.65
+      }
+    },
+    {
+      "id": "emergencyBoost",
+      "name": "緊急ブースト",
+      "kind": "single",
+      "maxLevel": 1,
+      "descriptions": [
+        "惑星HPが35%以下の間、自機衛星とパンチ性能を強化する。"
+      ],
+      "effect": {
+        "hpThreshold": 0.35,
+        "orbitSpeedMultiplier": 1.18,
+        "punchSpeedMultiplier": 1.18,
+        "punchRangeBonus": 24,
+        "cooldownMultiplier": 0.82
+      }
+    },
+    {
+      "id": "planetRepair",
+      "name": "惑星修復",
+      "kind": "instant",
+      "maxLevel": 0,
+      "descriptions": [
+        "惑星HPを即時に35回復する。最大値を超えては回復しない。"
+      ],
+      "effect": { "recovery": 35 }
+    },
+    {
+      "id": "twinPunch",
+      "name": "ツインパンチ",
+      "kind": "single",
+      "maxLevel": 1,
+      "descriptions": [
+        "パンチ時に左右交互の補助パンチを追加で発生させる。"
+      ],
+      "effect": {
+        "angleOffsetDegrees": 18,
+        "rangeMultiplier": 0.86,
+        "radiusMultiplier": 0.74,
+        "damageMultiplier": 0.65,
+        "knockSpeedMultiplier": 0.74
+      }
+    },
+    {
+      "id": "overdrive",
+      "name": "オーバードライブ",
+      "kind": "single",
+      "maxLevel": 1,
+      "descriptions": [
+        "5チェーン以上の達成後、短時間だけパンチ性能を強化する。"
+      ],
+      "effect": {
+        "chainThreshold": 5,
+        "duration": 5,
+        "punchSpeedMultiplier": 1.25,
+        "knockSpeedMultiplier": 1.18,
+        "cooldownMultiplier": 0.78,
+        "punchRadiusBonus": 4
+      }
+    },
+    {
+      "id": "starburst",
+      "name": "スターバースト",
+      "kind": "single",
+      "maxLevel": 1,
+      "descriptions": [
+        "6チェーン以上の達成時、周囲へ衝撃波を発生させる。"
+      ],
+      "effect": {
+        "chainThreshold": 6,
+        "radius": 118,
+        "knockSpeed": 330,
+        "scoreBonus": 180,
+        "cooldown": 3
+      }
+    },
+    {
+      "id": "punchReload",
+      "name": "パンチリロード",
+      "kind": "multi",
+      "maxLevel": 2,
+      "descriptions": [
+        "チェーン衝突時、パンチクールダウンを0.12秒回復する。",
+        "チェーン衝突時、パンチクールダウンを0.22秒回復する。"
+      ],
+      "effects": [
+        { "cooldownRecovery": 0.12 },
+        { "cooldownRecovery": 0.22 }
+      ]
+    }
+  ]
+}
