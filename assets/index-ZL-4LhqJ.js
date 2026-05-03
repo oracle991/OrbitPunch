@@ -6362,7 +6362,7 @@ return new `+this.key+`();
         <h1>${V}</h1>
         <p class="summary">${H}</p>
         <button id="start-button" type="button">${J}</button>
-      `,this.hud.startButton=p.querySelector("#start-button"),this.hud.startButton.addEventListener("click",()=>this.handleOverlayAction())),this.overlayAction=Q,this.hud.overlay.classList.remove("hidden")}showTutorialOverlay(){const H=!this.sim.snapshot().gameOver&&!this.scene.isPaused();this.cancelFire(),H&&this.scene.pause();const J=this.hud.overlay.querySelector(".panel");J&&(J.classList.remove("upgrade-panel"),J.classList.add("tutorial-panel"),J.innerHTML=`
+      `,this.hud.startButton=p.querySelector("#start-button"),this.hud.startButton.addEventListener("click",()=>this.handleOverlayAction())),this.overlayAction=Q,this.hud.overlay.classList.remove("hidden")}showTutorialOverlay(){const V=this.sim.snapshot();if(V.gameOver)return;const H=!V.gameOver&&!this.scene.isPaused();this.cancelFire(),H&&this.scene.pause();const J=this.hud.overlay.querySelector(".panel");J&&(J.classList.remove("upgrade-panel"),J.classList.add("tutorial-panel"),J.innerHTML=`
         <p class="kicker">Tutorial</p>
         <h1>チュートリアル</h1>
         <div class="tutorial-content">
