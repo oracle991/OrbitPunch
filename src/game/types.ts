@@ -93,6 +93,7 @@ export type SimulationSnapshot = {
     canceled: boolean;
     progress: number;
   };
+  punchReachRadius: number;
   satelliteInvulnerability: number;
   gameOver: boolean;
 };

@@ -371,7 +371,7 @@ export class GameScene extends Phaser.Scene {
     this.graphics.strokeCircle(world.center.x, world.center.y, world.orbitRadius);
 
     this.graphics.lineStyle(1, palette.orbit, 0.12);
-    this.graphics.strokeCircle(world.center.x, world.center.y, world.outerRadius * 0.62);
+    this.graphics.strokeCircle(world.center.x, world.center.y, snapshot.punchReachRadius);
 
     const playerDirection = snapshot.playerAngle;
     this.graphics.lineStyle(1, palette.player, 0.22);

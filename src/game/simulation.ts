@@ -49,6 +49,7 @@ export type { UpgradeChoice, UpgradeId } from "./upgrades";
 export { world } from "./world";
 
 const PLAYER_ORBIT_SPEED = 1.95;
+const PUNCH_ORIGIN_RADIUS = ORBIT_RADIUS + 21;
 const PUNCH_EXTEND_SPEED = 480;
 const PUNCH_RETURN_SPEED = 560;
 const PUNCH_RANGE = 120;
@@ -226,7 +227,7 @@ export class OrbitPunchSimulation {
       (charged ? CHARGE_PUNCH_SPEED_MULTIPLIER : 1) * this.currentPunchSpeedMultiplier();
     const damageMultiplier =
       (charged ? CHARGE_PUNCH_DAMAGE_MULTIPLIER : 1) * (options.damageMultiplier ?? 1);
-    const origin = radialPoint(angle, ORBIT_RADIUS + 21);
+    const origin = radialPoint(angle, PUNCH_ORIGIN_RADIUS);
     const direction = normalize({ x: origin.x - CENTER.x, y: origin.y - CENTER.y });
     this.punches.push({
       id: nextId++,
@@ -390,6 +391,7 @@ export class OrbitPunchSimulation {
         canceled: this.chargeCanceled,
         progress: Math.min(1, this.chargeTimer / CHARGE_START_THRESHOLD)
       },
+      punchReachRadius: this.currentPunchReachRadius(),
       satelliteInvulnerability: this.satelliteInvulnerability,
       gameOver: this.gameOver
     };
@@ -410,7 +412,7 @@ export class OrbitPunchSimulation {
     for (const punch of this.punches) {
       const currentOrigin = radialPoint(
         this.playerAngle + punch.orbitAngleOffset,
-        ORBIT_RADIUS + 21
+        PUNCH_ORIGIN_RADIUS
       );
       const originVelocity =
         dt > 0
@@ -1208,6 +1210,10 @@ export class OrbitPunchSimulation {
       this.effectValue("wideGlove", "punchRadiusBonus") +
       (this.isOverdriveActive() ? this.effectValue("overdrive", "punchRadiusBonus") : 0)
     );
+  }
+
+  private currentPunchReachRadius(): number {
+    return PUNCH_ORIGIN_RADIUS + this.currentPunchRange() + this.currentPunchRadius();
   }
 
   private currentPunchSpeedMultiplier(): number {
