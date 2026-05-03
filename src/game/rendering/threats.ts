@@ -33,16 +33,6 @@ export const drawThreats = (
 };
 
 const drawMeteor = (graphics: Phaser.GameObjects.Graphics, meteor: Meteor): void => {
-  const angle = Math.atan2(world.center.y - meteor.pos.y, world.center.x - meteor.pos.x);
-  graphics.lineStyle(1, meteor.knocked ? palette.punch : palette.danger, 0.18);
-  graphics.beginPath();
-  graphics.moveTo(meteor.pos.x, meteor.pos.y);
-  graphics.lineTo(
-    meteor.pos.x + Math.cos(angle) * 46,
-    meteor.pos.y + Math.sin(angle) * 46
-  );
-  graphics.strokePath();
-
   graphics.fillStyle(meteor.knocked ? palette.punch : palette.meteorEdge, 0.28);
   graphics.fillCircle(meteor.pos.x, meteor.pos.y, meteor.radius + 4);
   graphics.fillStyle(meteor.knocked ? 0x6bdff0 : palette.meteor, 1);

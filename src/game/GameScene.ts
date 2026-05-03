@@ -394,15 +394,6 @@ export class GameScene extends Phaser.Scene {
     this.graphics.lineStyle(1, palette.orbit, 0.12);
     this.graphics.strokeCircle(world.center.x, world.center.y, snapshot.punchReachRadius);
 
-    const playerDirection = snapshot.playerAngle;
-    this.graphics.lineStyle(1, palette.player, 0.22);
-    this.graphics.beginPath();
-    this.graphics.moveTo(world.center.x, world.center.y);
-    this.graphics.lineTo(
-      world.center.x + Math.cos(playerDirection) * (world.orbitRadius + 54),
-      world.center.y + Math.sin(playerDirection) * (world.orbitRadius + 54)
-    );
-    this.graphics.strokePath();
   }
 
   private drawPlanet(snapshot: SimulationSnapshot): void {
@@ -460,15 +451,6 @@ export class GameScene extends Phaser.Scene {
 
   private drawThreatBackgroundEffects(meteor: Meteor): void {
     if (meteor.kind === "meteor") {
-      const angle = Math.atan2(world.center.y - meteor.pos.y, world.center.x - meteor.pos.x);
-      this.graphics.lineStyle(1, meteor.knocked ? palette.punch : palette.danger, 0.18);
-      this.graphics.beginPath();
-      this.graphics.moveTo(meteor.pos.x, meteor.pos.y);
-      this.graphics.lineTo(
-        meteor.pos.x + Math.cos(angle) * 46,
-        meteor.pos.y + Math.sin(angle) * 46
-      );
-      this.graphics.strokePath();
       this.graphics.fillStyle(meteor.knocked ? palette.punch : palette.meteorEdge, 0.22);
       this.graphics.fillCircle(meteor.pos.x, meteor.pos.y, meteor.radius + 4);
       return;
