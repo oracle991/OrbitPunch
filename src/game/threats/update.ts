@@ -1,6 +1,6 @@
 import { distance, length, normalize } from "../math";
 import type { Meteor } from "../types";
-import { CENTER } from "../world";
+import { CENTER, WORLD_HEIGHT, WORLD_WIDTH } from "../world";
 import {
   TRACTOR_KNOCKED_PULL_ACCELERATION,
   TRACTOR_KNOCKED_PULL_RANGE,
@@ -69,6 +69,11 @@ const spiralPoint = (meteor: Meteor): Meteor["pos"] => {
 };
 
 const updateOrbitalSatellite = (meteor: Meteor, dt: number): void => {
+  if ((meteor.orbitPhase ?? 0) >= Math.PI) {
+    updateOrbitalSatelliteExit(meteor, dt);
+    return;
+  }
+
   const previous = { ...meteor.pos };
   meteor.orbitPhase = Math.min(Math.PI, (meteor.orbitPhase ?? 0) + (meteor.orbitSpeed ?? 0) * dt);
   meteor.pos = ellipticalOrbitPoint(meteor);
@@ -81,8 +86,52 @@ const updateOrbitalSatellite = (meteor: Meteor, dt: number): void => {
   }
 
   if (meteor.orbitPhase >= Math.PI) {
+    ensureOrbitalSatelliteExitVelocity(meteor);
+  }
+};
+
+const updateOrbitalSatelliteExit = (meteor: Meteor, dt: number): void => {
+  ensureOrbitalSatelliteExitVelocity(meteor);
+  meteor.pos.x += meteor.vel.x * dt;
+  meteor.pos.y += meteor.vel.y * dt;
+
+  if (isOrbitalSatelliteFullyOffscreen(meteor)) {
     meteor.alive = false;
   }
+};
+
+const ensureOrbitalSatelliteExitVelocity = (meteor: Meteor): void => {
+  if (length(meteor.vel) > 0.001) {
+    return;
+  }
+
+  const speed = Math.max(1, (meteor.orbitMinorRadius ?? meteor.radius) * (meteor.orbitSpeed ?? 0));
+  const direction = orbitalSatelliteExitDirection(meteor);
+  meteor.vel = {
+    x: direction.x * speed,
+    y: direction.y * speed
+  };
+};
+
+const orbitalSatelliteExitDirection = (meteor: Meteor): Meteor["vel"] => {
+  const angle = meteor.orbitAngle ?? 0;
+  const direction = meteor.orbitDirection ?? 1;
+  const tangent = {
+    x: -Math.sin(angle) * direction,
+    y: Math.cos(angle) * direction
+  };
+
+  return normalize({ x: -tangent.x, y: -tangent.y });
+};
+
+export const isOrbitalSatelliteFullyOffscreen = (meteor: Meteor): boolean => {
+  const padding = meteor.radius * 2;
+  return (
+    meteor.pos.x < -padding ||
+    meteor.pos.x > WORLD_WIDTH + padding ||
+    meteor.pos.y < -padding ||
+    meteor.pos.y > WORLD_HEIGHT + padding
+  );
 };
 
 const ellipticalOrbitPoint = (meteor: Meteor): Meteor["pos"] => {

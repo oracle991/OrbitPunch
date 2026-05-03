@@ -6,7 +6,11 @@ import {
   MINI_BOSS_HIT_COOLDOWN,
   PUNCH_KNOCK_SPEED
 } from "./threats/config";
-import { applyTractorPull, updateThreat } from "./threats/update";
+import {
+  applyTractorPull,
+  isOrbitalSatelliteFullyOffscreen,
+  updateThreat
+} from "./threats/update";
 import { spawnScheduledMiniBoss, spawnThreat } from "./threats/spawn";
 import {
   defeatBonusForThreat,
@@ -340,9 +344,7 @@ export class OrbitPunchSimulation {
     this.punches = this.punches.filter(
       (punch) => punch.phase !== "returning" || punch.distance > PUNCH_RETURN_EPSILON
     );
-    this.meteors = this.meteors.filter(
-      (meteor) => meteor.alive && distance(meteor.pos, CENTER) < OUTER_RADIUS + 90
-    );
+    this.meteors = this.meteors.filter((meteor) => this.shouldKeepMeteor(meteor));
 
     for (const spark of this.sparks) {
       spark.life -= dt;
@@ -391,6 +393,18 @@ export class OrbitPunchSimulation {
       satelliteInvulnerability: this.satelliteInvulnerability,
       gameOver: this.gameOver
     };
+  }
+
+  private shouldKeepMeteor(meteor: Meteor): boolean {
+    if (!meteor.alive) {
+      return false;
+    }
+
+    if (meteor.kind === "orbitalSatellite" && !meteor.knocked) {
+      return !isOrbitalSatelliteFullyOffscreen(meteor);
+    }
+
+    return distance(meteor.pos, CENTER) < OUTER_RADIUS + 90;
   }
 
   private updateCharge(dt: number): void {
