@@ -1,0 +1,62 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: github-pages-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish dist to gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin gh-pages --depth=1 || true
+          if git show-ref --verify --quiet refs/remotes/origin/gh-pages; then
+            git worktree add pages-worktree origin/gh-pages
+          else
+            git worktree add --detach pages-worktree
+            git -C pages-worktree checkout --orphan gh-pages
+            git -C pages-worktree rm -rf . || true
+          fi
+
+          rsync -a --delete --exclude .git dist/ pages-worktree/
+          touch pages-worktree/.nojekyll
+
+          git -C pages-worktree add -A
+          if git -C pages-worktree diff --cached --quiet; then
+            echo "No deployment changes."
+            exit 0
+          fi
+
+          git -C pages-worktree commit -m "Deploy ${GITHUB_SHA}"
+          git -C pages-worktree push origin HEAD:gh-pages
