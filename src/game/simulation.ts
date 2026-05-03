@@ -178,15 +178,11 @@ export class OrbitPunchSimulation {
   }
 
   public upgradeChoices(count = upgradeConfig.selectionCount): UpgradeChoice[] {
-    return upgradeDefinitions
-      .filter((definition) => this.canSelectUpgrade(definition.id))
-      .map((definition, index) => ({
-        definition,
-        sort: this.upgradeSortValue(index)
-      }))
-      .sort((first, second) => first.sort - second.sort)
+    return this.shuffleUpgrades(
+      upgradeDefinitions.filter((definition) => this.canSelectUpgrade(definition.id))
+    )
       .slice(0, count)
-      .map(({ definition }) => this.toUpgradeChoice(definition.id));
+      .map((definition) => this.toUpgradeChoice(definition.id));
   }
 
   public applyUpgrade(upgradeId: UpgradeId): { applied: boolean; recovered: number } {
@@ -1107,15 +1103,13 @@ export class OrbitPunchSimulation {
     return this.upgradeLevels[upgradeId] < definition.maxLevel;
   }
 
-  private upgradeSortValue(index: number): number {
-    const seed =
-      Math.sin(
-        (this.wave + 1) * 12.9898 +
-          (this.defeated + 1) * 78.233 +
-          (this.score + 1) * 0.00037 +
-          index * 37.719
-      ) * 43758.5453;
-    return seed - Math.floor(seed);
+  private shuffleUpgrades<T>(items: T[]): T[] {
+    const shuffled = [...items];
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1));
+      [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+    }
+    return shuffled;
   }
 
   private toUpgradeChoice(upgradeId: UpgradeId): UpgradeChoice {
