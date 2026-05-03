@@ -50,8 +50,6 @@ const drawOrbitalSatellite = (graphics: Phaser.GameObjects.Graphics, meteor: Met
   const panelX = Math.cos(angle + Math.PI / 2);
   const panelY = Math.sin(angle + Math.PI / 2);
 
-  graphics.lineStyle(1, meteor.knocked ? palette.punch : palette.orbitalPanel, 0.34);
-  graphics.strokeCircle(meteor.pos.x, meteor.pos.y, meteor.radius + 8);
   graphics.fillStyle(meteor.knocked ? palette.punch : palette.orbitalSatellite, 1);
   graphics.fillCircle(meteor.pos.x, meteor.pos.y, meteor.radius * 0.72);
   graphics.fillStyle(palette.orbitalPanel, meteor.knocked ? 0.5 : 0.92);

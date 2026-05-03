@@ -615,8 +615,6 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (meteor.kind === "orbitalSatellite") {
-      this.graphics.lineStyle(1, meteor.knocked ? palette.punch : palette.orbitalPanel, 0.34);
-      this.graphics.strokeCircle(meteor.pos.x, meteor.pos.y, meteor.radius + 8);
       return;
     }
 
