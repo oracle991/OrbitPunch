@@ -477,3 +477,45 @@ h1 {
     min-height: 52px;
   }
 }
+
+
+@media (max-width: 820px) {
+  #app {
+    padding: 12px;
+  }
+
+  #game-shell {
+    width: min(100vw - 24px, 100vh - 140px, 960px);
+    overflow: visible;
+  }
+
+  #hud {
+    top: calc(100% + 10px);
+    left: 0;
+    right: 58px;
+    grid-template-columns: minmax(120px, 1fr) repeat(3, minmax(62px, auto));
+    gap: 8px;
+  }
+
+  .icon-button {
+    top: calc(100% + 12px);
+    right: 0;
+    width: 42px;
+    height: 42px;
+    font-size: 22px;
+  }
+
+  .stat {
+    min-height: 42px;
+    padding: 7px 9px;
+  }
+
+  .stat span {
+    margin-bottom: 5px;
+    font-size: 9px;
+  }
+
+  .stat strong {
+    font-size: 16px;
+  }
+}
