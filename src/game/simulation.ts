@@ -38,6 +38,15 @@ const PUNCH_RANGE = 120;
 const PUNCH_HOLD_TIME = 0.24;
 const PUNCH_COOLDOWN = 0.56;
 const PUNCH_RETURN_EPSILON = 6;
+const PUNCH_CHAIN_SEGMENTS = 8;
+const PUNCH_FIST_DRAG = 0.88;
+const PUNCH_RETURN_SPRING = 42;
+const PUNCH_RETURN_DAMPING = 8.5;
+const PUNCH_RETURN_REEL_ACCELERATION = 2200;
+const PUNCH_TETHER_REBOUND = 0.16;
+const PUNCH_LAUNCH_GUIDE_TIME = 0.32;
+const PUNCH_LAUNCH_GUIDE_STRENGTH = 18;
+const PUNCH_LAUNCH_LATERAL_DAMPING = 0.72;
 const CHARGE_START_THRESHOLD = 0.08;
 const CHARGE_ORBIT_SPEED_MULTIPLIER = 0.5;
 const CHARGE_PUNCH_SPEED_MULTIPLIER = 2;
@@ -148,7 +157,13 @@ export class OrbitPunchSimulation {
       id: nextId++,
       origin,
       pos: origin,
+      vel: {
+        x: direction.x * PUNCH_EXTEND_SPEED * speedMultiplier,
+        y: direction.y * PUNCH_EXTEND_SPEED * speedMultiplier
+      },
       direction,
+      chainPoints: Array.from({ length: PUNCH_CHAIN_SEGMENTS }, () => ({ ...origin })),
+      chainTime: 0,
       radius: 18,
       distance: 0,
       maxDistance: PUNCH_RANGE,
@@ -283,19 +298,38 @@ export class OrbitPunchSimulation {
 
     for (const punch of this.punches) {
       punch.origin = { ...currentOrigin };
+      punch.chainTime += dt;
 
       if (punch.phase === "extending") {
-        punch.distance = Math.min(punch.maxDistance, punch.distance + punch.extendSpeed * dt);
-        punch.pos.x = punch.origin.x + punch.direction.x * punch.distance;
-        punch.pos.y = punch.origin.y + punch.direction.y * punch.distance;
+        const frontDirection = normalize({
+          x: punch.origin.x - CENTER.x,
+          y: punch.origin.y - CENTER.y
+        });
+        const guideRatio = Math.max(0, 1 - punch.chainTime / PUNCH_LAUNCH_GUIDE_TIME);
+        const thrust = punch.extendSpeed * 7.5;
+        const thrustDirection = guideRatio > 0 ? frontDirection : punch.direction;
+        punch.vel.x += thrustDirection.x * thrust * dt;
+        punch.vel.y += thrustDirection.y * thrust * dt;
+        this.limitPunchSpeed(punch, punch.extendSpeed * 1.28);
+        this.applyPunchDrag(punch, dt, 0.2);
+        punch.pos.x += punch.vel.x * dt;
+        punch.pos.y += punch.vel.y * dt;
+        if (guideRatio > 0) {
+          this.guidePunchLaunch(punch, frontDirection, guideRatio, dt);
+        }
+        this.constrainPunchTether(punch);
+        this.updatePunchDirection(punch);
 
-        if (punch.distance >= punch.maxDistance) {
+        if (punch.distance >= punch.maxDistance - 1) {
           punch.phase = "holding";
         }
       } else if (punch.phase === "holding") {
         punch.hold -= dt;
-        punch.pos.x = punch.origin.x + punch.direction.x * punch.distance;
-        punch.pos.y = punch.origin.y + punch.direction.y * punch.distance;
+        this.applyPunchDrag(punch, dt, 1.15);
+        punch.pos.x += punch.vel.x * dt;
+        punch.pos.y += punch.vel.y * dt;
+        this.constrainPunchTether(punch);
+        this.updatePunchDirection(punch);
 
         if (punch.hold <= 0) {
           punch.phase = "returning";
@@ -306,23 +340,144 @@ export class OrbitPunchSimulation {
           y: punch.origin.y - punch.pos.y
         };
         const remaining = Math.hypot(toOrigin.x, toOrigin.y);
-        const step = punch.returnSpeed * dt;
 
-        if (remaining <= step || remaining <= PUNCH_RETURN_EPSILON) {
-          punch.pos = { ...punch.origin };
-          punch.distance = 0;
+        if (remaining <= PUNCH_RETURN_EPSILON) {
+          this.collectPunch(punch);
         } else {
-          punch.pos.x += (toOrigin.x / remaining) * step;
-          punch.pos.y += (toOrigin.y / remaining) * step;
-          punch.distance = distance(punch.pos, punch.origin);
-          punch.direction = normalize({
-            x: punch.pos.x - punch.origin.x,
-            y: punch.pos.y - punch.origin.y
-          });
+          const spring = PUNCH_RETURN_SPRING * (punch.charged ? 1.16 : 1);
+          const damping = PUNCH_RETURN_DAMPING * (punch.charged ? 1.08 : 1);
+          const reelAcceleration = PUNCH_RETURN_REEL_ACCELERATION * (punch.charged ? 1.18 : 1);
+          const returnDirection = normalize(toOrigin);
+          punch.vel.x +=
+            (toOrigin.x * spring + returnDirection.x * reelAcceleration - punch.vel.x * damping) *
+            dt;
+          punch.vel.y +=
+            (toOrigin.y * spring + returnDirection.y * reelAcceleration - punch.vel.y * damping) *
+            dt;
+          this.limitPunchSpeed(punch, punch.returnSpeed * 1.9);
+          punch.pos.x += punch.vel.x * dt;
+          punch.pos.y += punch.vel.y * dt;
+
+          const nextToOrigin = {
+            x: punch.origin.x - punch.pos.x,
+            y: punch.origin.y - punch.pos.y
+          };
+          if (toOrigin.x * nextToOrigin.x + toOrigin.y * nextToOrigin.y <= 0) {
+            this.collectPunch(punch);
+          } else {
+            this.updatePunchDirection(punch);
+          }
         }
       }
 
       punch.life = punch.maxLife * Math.max(0.2, punch.distance / punch.maxDistance);
+      this.updatePunchChain(punch);
+    }
+  }
+
+  private applyPunchDrag(punch: Punch, dt: number, multiplier: number): void {
+    const drag = Math.exp(-PUNCH_FIST_DRAG * multiplier * dt);
+    punch.vel.x *= drag;
+    punch.vel.y *= drag;
+  }
+
+  private limitPunchSpeed(punch: Punch, maxSpeed: number): void {
+    const speed = length(punch.vel);
+    if (speed <= maxSpeed || speed <= 0.001) {
+      return;
+    }
+
+    const scale = maxSpeed / speed;
+    punch.vel.x *= scale;
+    punch.vel.y *= scale;
+  }
+
+  private collectPunch(punch: Punch): void {
+    punch.pos = { ...punch.origin };
+    punch.vel = { x: 0, y: 0 };
+    punch.distance = 0;
+  }
+
+  private guidePunchLaunch(
+    punch: Punch,
+    frontDirection: Vec2,
+    guideRatio: number,
+    dt: number
+  ): void {
+    const currentDistance = distance(punch.pos, punch.origin);
+    const target = {
+      x: punch.origin.x + frontDirection.x * currentDistance,
+      y: punch.origin.y + frontDirection.y * currentDistance
+    };
+    const correction = Math.min(0.72, PUNCH_LAUNCH_GUIDE_STRENGTH * guideRatio * dt);
+    punch.pos.x += (target.x - punch.pos.x) * correction;
+    punch.pos.y += (target.y - punch.pos.y) * correction;
+
+    const side = { x: -frontDirection.y, y: frontDirection.x };
+    const lateralVelocity = punch.vel.x * side.x + punch.vel.y * side.y;
+    punch.vel.x -= side.x * lateralVelocity * PUNCH_LAUNCH_LATERAL_DAMPING * guideRatio;
+    punch.vel.y -= side.y * lateralVelocity * PUNCH_LAUNCH_LATERAL_DAMPING * guideRatio;
+    punch.direction = frontDirection;
+  }
+
+  private constrainPunchTether(punch: Punch): void {
+    const toFist = {
+      x: punch.pos.x - punch.origin.x,
+      y: punch.pos.y - punch.origin.y
+    };
+    const tetherDistance = length(toFist);
+    if (tetherDistance <= punch.maxDistance || tetherDistance <= 0.001) {
+      return;
+    }
+
+    const tetherNormal = normalize(toFist);
+    punch.pos.x = punch.origin.x + tetherNormal.x * punch.maxDistance;
+    punch.pos.y = punch.origin.y + tetherNormal.y * punch.maxDistance;
+
+    const radialVelocity = punch.vel.x * tetherNormal.x + punch.vel.y * tetherNormal.y;
+    if (radialVelocity > 0) {
+      punch.vel.x -= tetherNormal.x * radialVelocity * (1 + PUNCH_TETHER_REBOUND);
+      punch.vel.y -= tetherNormal.y * radialVelocity * (1 + PUNCH_TETHER_REBOUND);
+    }
+  }
+
+  private updatePunchDirection(punch: Punch): void {
+    const toFist = {
+      x: punch.pos.x - punch.origin.x,
+      y: punch.pos.y - punch.origin.y
+    };
+    punch.distance = length(toFist);
+    if (punch.distance > 0.001) {
+      punch.direction = normalize(toFist);
+    }
+  }
+
+  private updatePunchChain(punch: Punch): void {
+    if (punch.chainPoints.length !== PUNCH_CHAIN_SEGMENTS) {
+      punch.chainPoints = Array.from({ length: PUNCH_CHAIN_SEGMENTS }, () => ({ ...punch.origin }));
+    }
+
+    const distanceRatio = Math.min(1, punch.distance / punch.maxDistance);
+    const wristDistance = Math.min(20, punch.distance * 0.36);
+    const wrist = {
+      x: punch.pos.x - punch.direction.x * wristDistance,
+      y: punch.pos.y - punch.direction.y * wristDistance
+    };
+    const side = { x: -punch.direction.y, y: punch.direction.x };
+    const lateralVelocity = punch.vel.x * side.x + punch.vel.y * side.y;
+    const slack = (1 - distanceRatio) * 18 + (punch.phase === "returning" ? 8 : 0);
+    const velocityBow = Math.max(-20, Math.min(20, lateralVelocity * 0.035));
+
+    for (let i = 0; i < punch.chainPoints.length; i += 1) {
+      const t = i / (punch.chainPoints.length - 1);
+      const linkSlack = Math.sin(t * Math.PI);
+      const wave =
+        linkSlack *
+        (velocityBow + Math.sin(punch.chainTime * 15 + t * Math.PI * 2.2) * slack * 0.42);
+      punch.chainPoints[i] = {
+        x: punch.origin.x + (wrist.x - punch.origin.x) * t + side.x * wave,
+        y: punch.origin.y + (wrist.y - punch.origin.y) * t + side.y * wave
+      };
     }
   }
 
@@ -340,18 +495,32 @@ export class OrbitPunchSimulation {
           continue;
         }
 
-        const wrist = {
-          x: punch.pos.x - punch.direction.x * 20,
-          y: punch.pos.y - punch.direction.y * 20
-        };
-        const closest = closestPointOnSegment(meteor.pos, punch.origin, wrist);
-        if (distance(closest, meteor.pos) > PUNCH_CHAIN_RADIUS + meteor.radius) {
+        let chainContact: Vec2 | undefined;
+        const chainPoints =
+          punch.chainPoints.length >= 2
+            ? punch.chainPoints
+            : [
+                punch.origin,
+                {
+                  x: punch.pos.x - punch.direction.x * 20,
+                  y: punch.pos.y - punch.direction.y * 20
+                }
+              ];
+        for (let i = 0; i < chainPoints.length - 1; i += 1) {
+          const closest = closestPointOnSegment(meteor.pos, chainPoints[i], chainPoints[i + 1]);
+          if (distance(closest, meteor.pos) <= PUNCH_CHAIN_RADIUS + meteor.radius) {
+            chainContact = closest;
+            break;
+          }
+        }
+
+        if (!chainContact) {
           continue;
         }
 
         const contactDirection = normalize({
-          x: meteor.pos.x - closest.x,
-          y: meteor.pos.y - closest.y
+          x: meteor.pos.x - chainContact.x,
+          y: meteor.pos.y - chainContact.y
         });
         const fallbackDirection = normalize({
           x: meteor.pos.x - CENTER.x,

@@ -42,7 +42,10 @@ export type Punch = {
   id: number;
   origin: Vec2;
   pos: Vec2;
+  vel: Vec2;
   direction: Vec2;
+  chainPoints: Vec2[];
+  chainTime: number;
   radius: number;
   distance: number;
   maxDistance: number;

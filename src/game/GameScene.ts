@@ -337,26 +337,39 @@ export class GameScene extends Phaser.Scene {
     for (const punch of snapshot.punches) {
       const alpha = Math.max(0, punch.life / punch.maxLife);
       const angle = Math.atan2(punch.direction.y, punch.direction.x);
-      const wristX = punch.pos.x - punch.direction.x * 20;
-      const wristY = punch.pos.y - punch.direction.y * 20;
+      const wristX = punch.chainPoints.at(-1)?.x ?? punch.pos.x - punch.direction.x * 20;
+      const wristY = punch.chainPoints.at(-1)?.y ?? punch.pos.y - punch.direction.y * 20;
       const sideX = Math.cos(angle + Math.PI / 2);
       const sideY = Math.sin(angle + Math.PI / 2);
+      const chainPoints =
+        punch.chainPoints.length >= 2
+          ? punch.chainPoints
+          : [punch.origin, { x: wristX, y: wristY }];
 
-      this.graphics.lineStyle(24, palette.punchShadow, 0.24 * alpha);
+      this.graphics.lineStyle(18, palette.punchShadow, 0.2 * alpha);
       this.graphics.beginPath();
-      this.graphics.moveTo(punch.origin.x, punch.origin.y);
-      this.graphics.lineTo(wristX, wristY);
+      this.graphics.moveTo(chainPoints[0].x, chainPoints[0].y);
+      for (const point of chainPoints.slice(1)) {
+        this.graphics.lineTo(point.x, point.y);
+      }
       this.graphics.strokePath();
 
-      this.graphics.lineStyle(15, palette.punch, 0.82 * alpha);
+      this.graphics.lineStyle(7, palette.punch, 0.78 * alpha);
       this.graphics.beginPath();
-      this.graphics.moveTo(punch.origin.x, punch.origin.y);
-      this.graphics.lineTo(wristX, wristY);
+      this.graphics.moveTo(chainPoints[0].x, chainPoints[0].y);
+      for (const point of chainPoints.slice(1)) {
+        this.graphics.lineTo(point.x, point.y);
+      }
       this.graphics.strokePath();
 
       this.graphics.fillStyle(palette.punch, 0.9 * alpha);
-      this.graphics.fillCircle(punch.origin.x, punch.origin.y, 9);
-      this.graphics.fillCircle(wristX, wristY, 10);
+      for (let i = 0; i < chainPoints.length; i += 1) {
+        const point = chainPoints[i];
+        const linkRadius = i === 0 || i === chainPoints.length - 1 ? 8 : 5.5;
+        this.graphics.fillCircle(point.x, point.y, linkRadius);
+        this.graphics.lineStyle(1, 0xffffff, 0.18 * alpha);
+        this.graphics.strokeCircle(point.x, point.y, linkRadius + 1.5);
+      }
 
       this.graphics.fillStyle(palette.punchGlove, 1 * alpha);
       fillRotatedEllipse(
