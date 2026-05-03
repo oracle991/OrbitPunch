@@ -947,6 +947,15 @@ export class OrbitPunchSimulation {
         continue;
       }
 
+      if (meteor.kind === "explosiveCore") {
+        this.cancelCharge();
+        this.applyExplosion(meteor, events, 1);
+        this.applySatelliteContactPenalty(playerPos);
+        events.hit = true;
+        events.satelliteHit = true;
+        continue;
+      }
+
       const overlap = SATELLITE_RADIUS + meteor.radius - distance(meteor.pos, playerPos) + 0.1;
       this.cancelCharge();
       meteor.pos.x += knockDirection.x * overlap;
