@@ -56,11 +56,14 @@ const SATELLITE_HIT_LOCKOUT = 1.35;
 const SATELLITE_INVULNERABILITY = 1.35;
 const PUNCH_CHAIN_RADIUS = 9;
 const MAX_PLANET_HP = 100;
+const PLANET_REPAIR_AMOUNT = 35;
 const CHAIN_SHIELD_RECOVERY = 4;
 const MAX_CHAIN_SHIELD_RECOVERY = 12;
 const MINI_BOSS_ENTRY_DELAY = 10;
 
 let nextId = 1;
+
+export type UpgradeId = "planetRepair";
 
 export class OrbitPunchSimulation {
   private playerAngle = -Math.PI / 2;
@@ -146,6 +149,14 @@ export class OrbitPunchSimulation {
     this.chargeTimer = 0;
     this.chargeActive = false;
     this.chargeCanceled = false;
+  }
+
+  public applyUpgrade(upgradeId: UpgradeId): { recovered: number } {
+    if (upgradeId === "planetRepair") {
+      return { recovered: this.recoverPlanetHp(PLANET_REPAIR_AMOUNT) };
+    }
+
+    return { recovered: 0 };
   }
 
   private createPunch(charged: boolean): void {
@@ -891,6 +902,14 @@ export class OrbitPunchSimulation {
     }
 
     const recovery = Math.min(MAX_CHAIN_SHIELD_RECOVERY, CHAIN_SHIELD_RECOVERY + chain);
+    return this.recoverPlanetHp(recovery);
+  }
+
+  private recoverPlanetHp(recovery: number): number {
+    if (this.planetHp >= MAX_PLANET_HP) {
+      return 0;
+    }
+
     const before = this.planetHp;
     this.planetHp = Math.min(MAX_PLANET_HP, this.planetHp + recovery);
     return this.planetHp - before;

@@ -1,5 +1,10 @@
 import Phaser from "phaser";
-import { OrbitPunchSimulation, type ChainHit, type SimulationSnapshot } from "./simulation";
+import {
+  OrbitPunchSimulation,
+  type ChainHit,
+  type SimulationSnapshot,
+  type UpgradeId
+} from "./simulation";
 import { palette } from "./rendering/palette";
 import { fillRotatedEllipse } from "./rendering/primitives";
 import { drawThreats } from "./rendering/threats";
@@ -166,18 +171,18 @@ export class GameScene extends Phaser.Scene {
         <p class="kicker">Satellite Upgrade</p>
         <h1>Wave ${wave}</h1>
         <p class="summary">Choose one upgrade to continue.</p>
-        <div class="upgrade-grid" role="list" aria-label="Upgrade choices">
-          <button class="upgrade-choice" type="button" data-upgrade-choice="1" role="listitem">
+        <div class="upgrade-grid upgrade-grid-single" role="list" aria-label="Upgrade choices">
+          <button class="upgrade-choice" type="button" data-upgrade-id="planetRepair" role="listitem">
             <span class="upgrade-art" aria-hidden="true"></span>
-            <span class="upgrade-name">Upgrade 1</span>
-            <span class="upgrade-description">Upgrade details will appear here.</span>
+            <span class="upgrade-name">惑星修復</span>
+            <span class="upgrade-description">惑星HPを即時に35回復する。最大値を超えては回復しない。</span>
           </button>
-          <button class="upgrade-choice" type="button" data-upgrade-choice="2" role="listitem">
+          <button class="upgrade-choice" type="button" data-upgrade-choice="2" role="listitem" hidden disabled>
             <span class="upgrade-art" aria-hidden="true"></span>
             <span class="upgrade-name">Upgrade 2</span>
             <span class="upgrade-description">Upgrade details will appear here.</span>
           </button>
-          <button class="upgrade-choice" type="button" data-upgrade-choice="3" role="listitem">
+          <button class="upgrade-choice" type="button" data-upgrade-choice="3" role="listitem" hidden disabled>
             <span class="upgrade-art" aria-hidden="true"></span>
             <span class="upgrade-name">Upgrade 3</span>
             <span class="upgrade-description">Upgrade details will appear here.</span>
@@ -185,8 +190,10 @@ export class GameScene extends Phaser.Scene {
         </div>
       `;
 
-      for (const button of panel.querySelectorAll<HTMLButtonElement>(".upgrade-choice")) {
+      for (const button of panel.querySelectorAll<HTMLButtonElement>("[data-upgrade-id]")) {
         button.addEventListener("click", () => {
+          this.sim.applyUpgrade(button.dataset.upgradeId as UpgradeId);
+          this.render(this.sim.snapshot(), 0);
           this.hud.overlay.classList.add("hidden");
           this.scene.resume();
         });
