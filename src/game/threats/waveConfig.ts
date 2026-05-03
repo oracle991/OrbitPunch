@@ -1,7 +1,9 @@
 import type { ThreatKind } from "../types";
 import waveConfigData from "../data/threat-waves.json";
 
+type RegularThreatKind = Exclude<ThreatKind, "orbitalSatellite">;
 type ThreatWeights = Record<ThreatKind, number>;
+type RegularThreatWeights = Record<RegularThreatKind, number>;
 
 type NumericRange = {
   base: number;
@@ -38,13 +40,29 @@ type WaveModifiers = {
   speed: number;
   aimRadius: number;
   spawnAngleSpread: number;
+};
+
+type RegularSpawnGroup = {
+  initialDelay: NumericRange;
   spawnInterval: NumericRange;
+  spawnWeights: RegularThreatWeights;
+};
+
+type OrbitalSatelliteSpawnGroup = {
+  enabled: boolean;
+  initialDelay: NumericRange;
+  spawnInterval: NumericRange;
+};
+
+type WaveSpawnGroups = {
+  regular: RegularSpawnGroup;
+  orbitalSatellite: OrbitalSatelliteSpawnGroup;
 };
 
 type WaveThreatConfig = {
   wave: number;
   modifiers: WaveModifiers;
-  spawnWeights: ThreatWeights;
+  spawnGroups: WaveSpawnGroups;
 };
 
 const THREAT_KINDS: ThreatKind[] = [
@@ -55,6 +73,20 @@ const THREAT_KINDS: ThreatKind[] = [
   "miniBoss"
 ];
 
+const REGULAR_THREAT_KINDS: RegularThreatKind[] = [
+  "meteor",
+  "explosiveCore",
+  "tractorDrone",
+  "miniBoss"
+];
+
+const FALLBACK_REGULAR_SPAWN_WEIGHTS: RegularThreatWeights = {
+  meteor: 100,
+  explosiveCore: 0,
+  tractorDrone: 0,
+  miniBoss: 0
+};
+
 const FALLBACK_WAVES: WaveThreatConfig[] = [
   {
     wave: 1,
@@ -63,15 +95,19 @@ const FALLBACK_WAVES: WaveThreatConfig[] = [
       radius: 1,
       speed: 1,
       aimRadius: 1,
-      spawnAngleSpread: 1,
-      spawnInterval: { base: 1.17, wave: 0, random: 0.45 }
+      spawnAngleSpread: 1
     },
-    spawnWeights: {
-      meteor: 100,
-      explosiveCore: 0,
-      orbitalSatellite: 0,
-      tractorDrone: 0,
-      miniBoss: 0
+    spawnGroups: {
+      regular: {
+        initialDelay: { base: 0.55, wave: 0, random: 0 },
+        spawnInterval: { base: 1.17, wave: 0, random: 0.45 },
+        spawnWeights: FALLBACK_REGULAR_SPAWN_WEIGHTS
+      },
+      orbitalSatellite: {
+        enabled: false,
+        initialDelay: { base: 1.1, wave: 0, random: 0 },
+        spawnInterval: { base: 3.2, wave: 0, random: 0.6 }
+      }
     }
   }
 ];
@@ -215,15 +251,13 @@ const normalizeWaveModifiers = (config: unknown): WaveModifiers => {
     radius: sanitizePositiveMultiplier(item?.radius),
     speed: sanitizePositiveMultiplier(item?.speed),
     aimRadius: sanitizePositiveMultiplier(item?.aimRadius),
-    spawnAngleSpread: sanitizePositiveMultiplier(item?.spawnAngleSpread),
-    spawnInterval: sanitizeRange(item?.spawnInterval, FALLBACK_WAVES[0].modifiers.spawnInterval)
+    spawnAngleSpread: sanitizePositiveMultiplier(item?.spawnAngleSpread)
   };
 };
 
-const normalizeWaveConfig = (config: unknown, index: number): WaveThreatConfig => {
-  const item = config as Partial<WaveThreatConfig> | undefined;
-  const rawWeights = item?.spawnWeights as Partial<ThreatWeights> | undefined;
-  const spawnWeights = THREAT_KINDS.reduce<ThreatWeights>(
+const normalizeRegularSpawnWeights = (config: unknown): RegularThreatWeights => {
+  const rawWeights = config as Partial<ThreatWeights> | undefined;
+  return REGULAR_THREAT_KINDS.reduce<RegularThreatWeights>(
     (weights, kind) => ({
       ...weights,
       [kind]: sanitizeWeight(rawWeights?.[kind])
@@ -231,16 +265,70 @@ const normalizeWaveConfig = (config: unknown, index: number): WaveThreatConfig =
     {
       meteor: 0,
       explosiveCore: 0,
-      orbitalSatellite: 0,
       tractorDrone: 0,
       miniBoss: 0
     }
   );
+};
+
+const normalizeRegularSpawnGroup = (
+  config: unknown,
+  legacyWaveConfig: Partial<{
+    modifiers: Partial<{ spawnInterval: unknown }>;
+    spawnWeights: unknown;
+  }>
+): RegularSpawnGroup => {
+  const item = config as Partial<RegularSpawnGroup> | undefined;
+  const fallback = FALLBACK_WAVES[0].spawnGroups.regular;
+  return {
+    initialDelay: sanitizeRange(item?.initialDelay, fallback.initialDelay),
+    spawnInterval: sanitizeRange(
+      item?.spawnInterval ?? legacyWaveConfig.modifiers?.spawnInterval,
+      fallback.spawnInterval
+    ),
+    spawnWeights: normalizeRegularSpawnWeights(item?.spawnWeights ?? legacyWaveConfig.spawnWeights)
+  };
+};
+
+const normalizeOrbitalSatelliteSpawnGroup = (
+  config: unknown,
+  legacyWaveConfig: Partial<{
+    modifiers: Partial<{ spawnInterval: unknown }>;
+    spawnWeights: Partial<ThreatWeights>;
+  }>
+): OrbitalSatelliteSpawnGroup => {
+  const item = config as Partial<OrbitalSatelliteSpawnGroup> | undefined;
+  const fallback = FALLBACK_WAVES[0].spawnGroups.orbitalSatellite;
+  const legacyWeight = sanitizeWeight(legacyWaveConfig.spawnWeights?.orbitalSatellite);
+  return {
+    enabled: typeof item?.enabled === "boolean" ? item.enabled : legacyWeight > 0,
+    initialDelay: sanitizeRange(item?.initialDelay, fallback.initialDelay),
+    spawnInterval: sanitizeRange(
+      item?.spawnInterval ?? legacyWaveConfig.modifiers?.spawnInterval,
+      fallback.spawnInterval
+    )
+  };
+};
+
+const normalizeSpawnGroups = (config: unknown, legacyWaveConfig: unknown): WaveSpawnGroups => {
+  const item = config as Partial<WaveSpawnGroups> | undefined;
+  const legacy = legacyWaveConfig as Partial<{
+    modifiers: Partial<{ spawnInterval: unknown }>;
+    spawnWeights: Partial<ThreatWeights>;
+  }>;
+  return {
+    regular: normalizeRegularSpawnGroup(item?.regular, legacy),
+    orbitalSatellite: normalizeOrbitalSatelliteSpawnGroup(item?.orbitalSatellite, legacy)
+  };
+};
+
+const normalizeWaveConfig = (config: unknown, index: number): WaveThreatConfig => {
+  const item = config as Partial<WaveThreatConfig> | undefined;
 
   return {
     wave: typeof item?.wave === "number" && Number.isFinite(item.wave) ? item.wave : index + 1,
     modifiers: normalizeWaveModifiers(item?.modifiers),
-    spawnWeights
+    spawnGroups: normalizeSpawnGroups(item?.spawnGroups, item)
   };
 };
 
@@ -250,11 +338,15 @@ const loadWaveConfigs = (): WaveThreatConfig[] => {
     ? source.waves.map((wave, index) => normalizeWaveConfig(wave, index))
     : [];
 
-  return waves.some((wave) => totalWeight(wave.spawnWeights) > 0) ? waves : FALLBACK_WAVES;
+  return waves.some((wave) => canSpawnAnyThreat(wave)) ? waves : FALLBACK_WAVES;
 };
 
-const totalWeight = (weights: ThreatWeights): number =>
-  THREAT_KINDS.reduce((total, kind) => total + weights[kind], 0);
+const totalRegularWeight = (weights: RegularThreatWeights): number =>
+  REGULAR_THREAT_KINDS.reduce((total, kind) => total + weights[kind], 0);
+
+const canSpawnAnyThreat = (wave: WaveThreatConfig): boolean =>
+  totalRegularWeight(wave.spawnGroups.regular.spawnWeights) > 0 ||
+  wave.spawnGroups.orbitalSatellite.enabled;
 
 const rollRange = (range: NumericRange, wave: number): number =>
   range.base + Math.max(0, wave) * range.wave + Math.random() * range.random;
@@ -268,32 +360,33 @@ const getWaveConfigForWave = (wave: number): WaveThreatConfig => {
   return waveConfigs[index];
 };
 
-export const getThreatWeightsForWave = (wave: number): ThreatWeights => {
+export const getRegularThreatWeightsForWave = (wave: number): RegularThreatWeights => {
   const config = getWaveConfigForWave(wave);
-
-  if (totalWeight(config.spawnWeights) <= 0) {
-    return FALLBACK_WAVES[0].spawnWeights;
-  }
-
-  return config.spawnWeights;
+  return config.spawnGroups.regular.spawnWeights;
 };
 
-export const pickWeightedThreatKind = (
+export const canSpawnRegularThreatForWave = (wave: number): boolean =>
+  totalRegularWeight(getRegularThreatWeightsForWave(wave)) > 0;
+
+export const canSpawnOrbitalSatelliteForWave = (wave: number): boolean =>
+  getWaveConfigForWave(wave).spawnGroups.orbitalSatellite.enabled;
+
+export const pickWeightedRegularThreatKind = (
   wave: number,
   canSpawnMiniBoss: boolean
-): ThreatKind => {
-  const weights = { ...getThreatWeightsForWave(wave) };
+): RegularThreatKind => {
+  const weights = { ...getRegularThreatWeightsForWave(wave) };
   if (!canSpawnMiniBoss) {
     weights.miniBoss = 0;
   }
 
-  const total = totalWeight(weights);
+  const total = totalRegularWeight(weights);
   if (total <= 0) {
     return "meteor";
   }
 
   let roll = Math.random() * total;
-  for (const kind of THREAT_KINDS) {
+  for (const kind of REGULAR_THREAT_KINDS) {
     roll -= weights[kind];
     if (roll < 0) {
       return kind;
@@ -304,7 +397,7 @@ export const pickWeightedThreatKind = (
 };
 
 export const hasMiniBossForWave = (wave: number): boolean =>
-  getThreatWeightsForWave(wave).miniBoss > 0;
+  getRegularThreatWeightsForWave(wave).miniBoss > 0;
 
 export const rollThreatSpawnConfig = (kind: ThreatKind, wave: number) => {
   const params = threatParams[kind];
@@ -337,7 +430,22 @@ export const defeatBonusForThreat = (kind: ThreatKind, wave: number): number => 
   return Math.round(threatParams[kind].score.defeatBonus * modifier);
 };
 
-export const rollSpawnIntervalForWave = (wave: number): number => {
-  const interval = getWaveConfigForWave(wave).modifiers.spawnInterval;
+export const rollRegularSpawnInitialDelayForWave = (wave: number): number => {
+  const delay = getWaveConfigForWave(wave).spawnGroups.regular.initialDelay;
+  return Math.max(0, rollRange(delay, 0));
+};
+
+export const rollRegularSpawnIntervalForWave = (wave: number): number => {
+  const interval = getWaveConfigForWave(wave).spawnGroups.regular.spawnInterval;
+  return Math.max(0.1, rollRange(interval, 0));
+};
+
+export const rollOrbitalSatelliteSpawnInitialDelayForWave = (wave: number): number => {
+  const delay = getWaveConfigForWave(wave).spawnGroups.orbitalSatellite.initialDelay;
+  return Math.max(0, rollRange(delay, 0));
+};
+
+export const rollOrbitalSatelliteSpawnIntervalForWave = (wave: number): number => {
+  const interval = getWaveConfigForWave(wave).spawnGroups.orbitalSatellite.spawnInterval;
   return Math.max(0.1, rollRange(interval, 0));
 };

@@ -1,7 +1,9 @@
 import { normalize, radialPoint } from "../math";
 import type { Meteor, ThreatKind } from "../types";
 import { CENTER, OUTER_RADIUS } from "../world";
-import { pickWeightedThreatKind, rollThreatSpawnConfig } from "./waveConfig";
+import { pickWeightedRegularThreatKind, rollThreatSpawnConfig } from "./waveConfig";
+
+type RegularThreatKind = Exclude<ThreatKind, "orbitalSatellite">;
 
 export type ThreatSpawnState = {
   wave: number;
@@ -13,26 +15,30 @@ export type ThreatSpawnResult = {
   threat: Meteor;
 };
 
-export const pickThreatKind = (wave: number): ThreatKind => {
-  return pickWeightedThreatKind(wave, false);
+export const pickThreatKind = (wave: number): RegularThreatKind => {
+  return pickWeightedRegularThreatKind(wave, false);
 };
 
 export const spawnThreat = (state: ThreatSpawnState): ThreatSpawnResult => {
   const kind = pickThreatKind(state.wave);
-  if (kind === "orbitalSatellite") {
-    return { threat: spawnOrbitalSatellite(state) };
-  }
   if (kind === "explosiveCore") {
     return { threat: spawnExplosiveCore(state) };
   }
   if (kind === "tractorDrone") {
     return { threat: spawnTractorDrone(state) };
   }
+  if (kind === "miniBoss") {
+    return { threat: spawnMiniBoss(state) };
+  }
   return { threat: spawnMeteor(state) };
 };
 
 export const spawnScheduledMiniBoss = (state: ThreatSpawnState): ThreatSpawnResult => ({
   threat: spawnMiniBoss(state)
+});
+
+export const spawnOrbitalSatelliteThreat = (state: ThreatSpawnState): ThreatSpawnResult => ({
+  threat: spawnOrbitalSatellite(state)
 });
 
 const spawnMeteor = (state: ThreatSpawnState): Meteor => {

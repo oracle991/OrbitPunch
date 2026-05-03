@@ -1,13 +1,14 @@
 {
   "notes": [
-    "Edit spawnWeights to tune which objects appear in each wave.",
-    "Weights are relative values: 0 disables a threat, larger numbers make it more likely.",
+    "Edit spawnGroups.regular.spawnWeights to tune non-Orbital Satellite threats.",
+    "Weights are relative values: 0 disables a regular threat, larger numbers make it more likely.",
     "miniBoss is special: a value above 0 schedules one mini boss 10 seconds after entering that wave, instead of adding it to random spawn rolls.",
+    "Edit spawnGroups.regular.spawnInterval to tune the cooldown for non-Orbital Satellite threats.",
+    "Edit spawnGroups.orbitalSatellite.enabled and spawnGroups.orbitalSatellite.spawnInterval to tune Orbital Satellite independently.",
     "Edit threatParams to tune score, radius, inbound speed, entry angle randomness, and per-wave growth.",
     "Each numeric range uses base + currentWave * wave + random(0, random), then wave modifiers are applied.",
     "spawnAngle.spreadDegrees controls where objects enter from. 360 means all around the screen.",
     "aimRadius controls inbound angle randomness: larger values let objects aim farther away from the planet center.",
-    "spawnInterval controls total object volume. Smaller base/random values spawn more objects.",
     "When the game reaches a wave beyond this list, it loops these entries from the beginning."
   ],
   "threatParams": {
@@ -63,15 +64,24 @@
         "radius": 1,
         "speed": 1,
         "aimRadius": 1,
-        "spawnAngleSpread": 1,
-        "spawnInterval": { "base": 1.17, "random": 0.45 }
+        "spawnAngleSpread": 1
       },
-      "spawnWeights": {
-        "meteor": 50,
-        "explosiveCore": 0,
-        "orbitalSatellite": 50,
-        "tractorDrone": 0,
-        "miniBoss": 0
+      "spawnGroups": {
+        "regular": {
+          "initialDelay": { "base": 0.55 },
+          "spawnInterval": { "base": 2.34, "random": 0.9 },
+          "spawnWeights": {
+            "meteor": 50,
+            "explosiveCore": 0,
+            "tractorDrone": 0,
+            "miniBoss": 0
+          }
+        },
+        "orbitalSatellite": {
+          "enabled": true,
+          "initialDelay": { "base": 1.1 },
+          "spawnInterval": { "base": 2.34, "random": 0.9 }
+        }
       }
     },
     {
@@ -81,15 +91,24 @@
         "radius": 1,
         "speed": 1.04,
         "aimRadius": 1.08,
-        "spawnAngleSpread": 1,
-        "spawnInterval": { "base": 1.59, "random": 0.45 }
+        "spawnAngleSpread": 1
       },
-      "spawnWeights": {
-        "meteor": 44,
-        "explosiveCore": 28,
-        "orbitalSatellite": 28,
-        "tractorDrone": 0,
-        "miniBoss": 0
+      "spawnGroups": {
+        "regular": {
+          "initialDelay": { "base": 0.5 },
+          "spawnInterval": { "base": 2.21, "random": 0.63 },
+          "spawnWeights": {
+            "meteor": 44,
+            "explosiveCore": 28,
+            "tractorDrone": 0,
+            "miniBoss": 0
+          }
+        },
+        "orbitalSatellite": {
+          "enabled": true,
+          "initialDelay": { "base": 1.3 },
+          "spawnInterval": { "base": 5.68, "random": 1.61 }
+        }
       }
     },
     {
@@ -99,15 +118,24 @@
         "radius": 1,
         "speed": 1,
         "aimRadius": 1,
-        "spawnAngleSpread": 1,
-        "spawnInterval": { "base": 1.37, "random": 0.25 }
+        "spawnAngleSpread": 1
       },
-      "spawnWeights": {
-        "meteor": 25,
-        "explosiveCore": 5,
-        "orbitalSatellite": 70,
-        "tractorDrone": 0,
-        "miniBoss": 0
+      "spawnGroups": {
+        "regular": {
+          "initialDelay": { "base": 0.5 },
+          "spawnInterval": { "base": 4.57, "random": 0.83 },
+          "spawnWeights": {
+            "meteor": 25,
+            "explosiveCore": 5,
+            "tractorDrone": 0,
+            "miniBoss": 0
+          }
+        },
+        "orbitalSatellite": {
+          "enabled": true,
+          "initialDelay": { "base": 0.9 },
+          "spawnInterval": { "base": 1.96, "random": 0.36 }
+        }
       }
     },
     {
@@ -117,33 +145,51 @@
         "radius": 1.04,
         "speed": 1.08,
         "aimRadius": 1.16,
-        "spawnAngleSpread": 1,
-        "spawnInterval": { "base": 1.93, "random": 0.45 }
+        "spawnAngleSpread": 1
       },
-      "spawnWeights": {
-        "meteor": 50,
-        "explosiveCore": 2,
-        "orbitalSatellite": 22,
-        "tractorDrone": 26,
-        "miniBoss": 0
+      "spawnGroups": {
+        "regular": {
+          "initialDelay": { "base": 0.5 },
+          "spawnInterval": { "base": 2.47, "random": 0.58 },
+          "spawnWeights": {
+            "meteor": 50,
+            "explosiveCore": 2,
+            "tractorDrone": 26,
+            "miniBoss": 0
+          }
+        },
+        "orbitalSatellite": {
+          "enabled": true,
+          "initialDelay": { "base": 1.2 },
+          "spawnInterval": { "base": 8.77, "random": 2.05 }
+        }
       }
     },
-        {
+    {
       "wave": 5,
       "modifiers": {
         "score": 1,
         "radius": 1,
         "speed": 1,
         "aimRadius": 1,
-        "spawnAngleSpread": 1,
-        "spawnInterval": { "base": 1.27, "random": 0.25 }
+        "spawnAngleSpread": 1
       },
-      "spawnWeights": {
-        "meteor": 30,
-        "explosiveCore": 2,
-        "orbitalSatellite": 65,
-        "tractorDrone": 3,
-        "miniBoss": 0
+      "spawnGroups": {
+        "regular": {
+          "initialDelay": { "base": 0.5 },
+          "spawnInterval": { "base": 3.63, "random": 0.71 },
+          "spawnWeights": {
+            "meteor": 30,
+            "explosiveCore": 2,
+            "tractorDrone": 3,
+            "miniBoss": 0
+          }
+        },
+        "orbitalSatellite": {
+          "enabled": true,
+          "initialDelay": { "base": 0.9 },
+          "spawnInterval": { "base": 1.95, "random": 0.38 }
+        }
       }
     },
     {
@@ -153,15 +199,24 @@
         "radius": 1,
         "speed": 1,
         "aimRadius": 1,
-        "spawnAngleSpread": 1,
-        "spawnInterval": { "base": 0.45, "random": 0.23 }
+        "spawnAngleSpread": 1
       },
-      "spawnWeights": {
-        "meteor": 20,
-        "explosiveCore": 10,
-        "orbitalSatellite": 60,
-        "tractorDrone": 5,
-        "miniBoss": 5
+      "spawnGroups": {
+        "regular": {
+          "initialDelay": { "base": 0.45 },
+          "spawnInterval": { "base": 1.22, "random": 0.62 },
+          "spawnWeights": {
+            "meteor": 20,
+            "explosiveCore": 10,
+            "tractorDrone": 5,
+            "miniBoss": 5
+          }
+        },
+        "orbitalSatellite": {
+          "enabled": true,
+          "initialDelay": { "base": 0.75 },
+          "spawnInterval": { "base": 0.71, "random": 0.36 }
+        }
       }
     }
   ]

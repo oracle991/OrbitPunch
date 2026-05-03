@@ -11,11 +11,16 @@ import {
   isOrbitalSatelliteFullyOffscreen,
   updateThreat
 } from "./threats/update";
-import { spawnScheduledMiniBoss, spawnThreat } from "./threats/spawn";
+import { spawnOrbitalSatelliteThreat, spawnScheduledMiniBoss, spawnThreat } from "./threats/spawn";
 import {
+  canSpawnOrbitalSatelliteForWave,
+  canSpawnRegularThreatForWave,
   defeatBonusForThreat,
   hasMiniBossForWave,
-  rollSpawnIntervalForWave,
+  rollOrbitalSatelliteSpawnInitialDelayForWave,
+  rollOrbitalSatelliteSpawnIntervalForWave,
+  rollRegularSpawnInitialDelayForWave,
+  rollRegularSpawnIntervalForWave,
   scoreForThreat
 } from "./threats/waveConfig";
 import type {
@@ -90,7 +95,8 @@ export class OrbitPunchSimulation {
   private punches: Punch[] = [];
   private sparks: HitSpark[] = [];
   private chainTreeSizes = new Map<number, number>();
-  private spawnTimer = 0.85;
+  private regularSpawnTimer = 0.85;
+  private orbitalSatelliteSpawnTimer = Number.POSITIVE_INFINITY;
   private cooldown = 0;
   private fireHeld = false;
   private chargeTimer = 0;
@@ -117,7 +123,9 @@ export class OrbitPunchSimulation {
     this.punches = [];
     this.sparks = [];
     this.chainTreeSizes = new Map();
-    this.spawnTimer = 0.55;
+    this.wave = 1;
+    this.regularSpawnTimer = rollRegularSpawnInitialDelayForWave(this.wave);
+    this.orbitalSatelliteSpawnTimer = this.nextOrbitalSatelliteSpawnDelay();
     this.cooldown = 0;
     this.fireHeld = false;
     this.chargeTimer = 0;
@@ -125,7 +133,6 @@ export class OrbitPunchSimulation {
     this.chargeCanceled = false;
     this.satelliteInvulnerability = 0;
     this.score = 0;
-    this.wave = 1;
     this.defeated = 0;
     this.miniBossWave = 0;
     this.miniBossSpawnTimer = Number.POSITIVE_INFINITY;
@@ -301,17 +308,32 @@ export class OrbitPunchSimulation {
     this.orbitalShieldCooldown = Math.max(0, this.orbitalShieldCooldown - dt);
     this.overdriveTimer = Math.max(0, this.overdriveTimer - dt);
     this.starburstCooldown = Math.max(0, this.starburstCooldown - dt);
-    this.spawnTimer -= dt;
+    this.regularSpawnTimer -= dt;
+    this.orbitalSatelliteSpawnTimer -= dt;
     this.miniBossSpawnTimer -= dt;
 
-    if (this.spawnTimer <= 0) {
+    if (this.regularSpawnTimer <= 0 && canSpawnRegularThreatForWave(this.wave)) {
       const spawned = spawnThreat({
         wave: this.wave,
         defeated: this.defeated,
         nextId: () => nextId++
       });
       this.meteors.push(spawned.threat);
-      this.spawnTimer = rollSpawnIntervalForWave(this.wave);
+      this.regularSpawnTimer = rollRegularSpawnIntervalForWave(this.wave);
+    } else if (!canSpawnRegularThreatForWave(this.wave)) {
+      this.regularSpawnTimer = Number.POSITIVE_INFINITY;
+    }
+
+    if (this.orbitalSatelliteSpawnTimer <= 0 && canSpawnOrbitalSatelliteForWave(this.wave)) {
+      const spawned = spawnOrbitalSatelliteThreat({
+        wave: this.wave,
+        defeated: this.defeated,
+        nextId: () => nextId++
+      });
+      this.meteors.push(spawned.threat);
+      this.orbitalSatelliteSpawnTimer = rollOrbitalSatelliteSpawnIntervalForWave(this.wave);
+    } else if (!canSpawnOrbitalSatelliteForWave(this.wave)) {
+      this.orbitalSatelliteSpawnTimer = Number.POSITIVE_INFINITY;
     }
 
     if (this.miniBossSpawnTimer <= 0 && this.miniBossScheduledWave === this.wave) {
@@ -1477,7 +1499,28 @@ export class OrbitPunchSimulation {
     }
 
     this.wave = nextWave;
+    this.refreshSpawnTimersForCurrentWave();
     this.scheduleMiniBossForCurrentWave();
+  }
+
+  private refreshSpawnTimersForCurrentWave(): void {
+    if (!canSpawnRegularThreatForWave(this.wave)) {
+      this.regularSpawnTimer = Number.POSITIVE_INFINITY;
+    } else if (!Number.isFinite(this.regularSpawnTimer)) {
+      this.regularSpawnTimer = rollRegularSpawnInitialDelayForWave(this.wave);
+    }
+
+    if (!canSpawnOrbitalSatelliteForWave(this.wave)) {
+      this.orbitalSatelliteSpawnTimer = Number.POSITIVE_INFINITY;
+    } else if (!Number.isFinite(this.orbitalSatelliteSpawnTimer)) {
+      this.orbitalSatelliteSpawnTimer = this.nextOrbitalSatelliteSpawnDelay();
+    }
+  }
+
+  private nextOrbitalSatelliteSpawnDelay(): number {
+    return canSpawnOrbitalSatelliteForWave(this.wave)
+      ? rollOrbitalSatelliteSpawnInitialDelayForWave(this.wave)
+      : Number.POSITIVE_INFINITY;
   }
 
   private scheduleMiniBossForCurrentWave(): void {
