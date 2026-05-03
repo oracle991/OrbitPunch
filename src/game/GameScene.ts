@@ -278,12 +278,21 @@ export class GameScene extends Phaser.Scene {
     const angle = snapshot.playerAngle;
     const noseX = pos.x + Math.cos(angle) * 22;
     const noseY = pos.y + Math.sin(angle) * 22;
+    const invulnerable = snapshot.satelliteInvulnerability > 0;
+    const blinkAlpha = invulnerable
+      ? Phaser.Math.Linear(0.34, 0.78, Math.sin(snapshot.satelliteInvulnerability * 32) * 0.5 + 0.5)
+      : 1;
 
-    this.graphics.fillStyle(palette.player, 1);
+    if (invulnerable) {
+      this.graphics.lineStyle(2, palette.playerCore, 0.32);
+      this.graphics.strokeCircle(pos.x, pos.y, 23);
+    }
+
+    this.graphics.fillStyle(palette.player, blinkAlpha);
     this.graphics.fillCircle(pos.x, pos.y, 15);
-    this.graphics.fillStyle(palette.playerCore, 1);
+    this.graphics.fillStyle(palette.playerCore, blinkAlpha);
     this.graphics.fillCircle(pos.x + Math.cos(angle) * 5, pos.y + Math.sin(angle) * 5, 5);
-    this.graphics.lineStyle(4, palette.player, 0.82);
+    this.graphics.lineStyle(4, palette.player, 0.82 * blinkAlpha);
     this.graphics.beginPath();
     this.graphics.moveTo(pos.x, pos.y);
     this.graphics.lineTo(noseX, noseY);

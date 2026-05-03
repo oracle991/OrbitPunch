@@ -71,6 +71,7 @@ export type SimulationSnapshot = {
   maxPlanetHp: number;
   cooldown: number;
   cooldownMax: number;
+  satelliteInvulnerability: number;
   gameOver: boolean;
 };
 

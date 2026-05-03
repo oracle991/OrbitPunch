@@ -40,6 +40,7 @@ const PUNCH_COOLDOWN = 0.56;
 const PUNCH_RETURN_EPSILON = 6;
 const SATELLITE_KNOCK_SPEED = 250;
 const SATELLITE_HIT_LOCKOUT = 1.35;
+const SATELLITE_INVULNERABILITY = 1.35;
 const PUNCH_CHAIN_RADIUS = 9;
 const MAX_PLANET_HP = 100;
 const CHAIN_SHIELD_RECOVERY = 4;
@@ -56,6 +57,7 @@ export class OrbitPunchSimulation {
   private chainTreeSizes = new Map<number, number>();
   private spawnTimer = 0.85;
   private cooldown = 0;
+  private satelliteInvulnerability = 0;
   private score = 0;
   private wave = 1;
   private defeated = 0;
@@ -73,6 +75,7 @@ export class OrbitPunchSimulation {
     this.chainTreeSizes = new Map();
     this.spawnTimer = 0.55;
     this.cooldown = 0;
+    this.satelliteInvulnerability = 0;
     this.score = 0;
     this.wave = 1;
     this.defeated = 0;
@@ -122,6 +125,7 @@ export class OrbitPunchSimulation {
 
     this.playerAngle += PLAYER_ORBIT_SPEED * dt;
     this.cooldown = Math.max(0, this.cooldown - dt);
+    this.satelliteInvulnerability = Math.max(0, this.satelliteInvulnerability - dt);
     this.spawnTimer -= dt;
     this.miniBossSpawnTimer -= dt;
 
@@ -195,6 +199,7 @@ export class OrbitPunchSimulation {
       maxPlanetHp: MAX_PLANET_HP,
       cooldown: this.cooldown,
       cooldownMax: this.cooldown > PUNCH_COOLDOWN ? SATELLITE_HIT_LOCKOUT : PUNCH_COOLDOWN,
+      satelliteInvulnerability: this.satelliteInvulnerability,
       gameOver: this.gameOver
     };
   }
@@ -440,6 +445,10 @@ export class OrbitPunchSimulation {
   }
 
   private resolveSatelliteImpacts(events: SimulationEvents): void {
+    if (this.satelliteInvulnerability > 0) {
+      return;
+    }
+
     const playerPos = radialPoint(this.playerAngle, ORBIT_RADIUS);
 
     for (const meteor of this.meteors) {
@@ -463,6 +472,7 @@ export class OrbitPunchSimulation {
       if (meteor.kind === "miniBoss") {
         this.damageMiniBoss(meteor, 1, 45 + this.wave * 10, MINI_BOSS_HIT_COOLDOWN);
         this.cooldown = Math.max(this.cooldown, SATELLITE_HIT_LOCKOUT);
+        this.satelliteInvulnerability = SATELLITE_INVULNERABILITY;
         events.hit = true;
         events.satelliteHit = true;
         continue;
@@ -473,6 +483,7 @@ export class OrbitPunchSimulation {
       meteor.pos.y += knockDirection.y * overlap;
       this.deflectMeteor(meteor, knockDirection, SATELLITE_KNOCK_SPEED + this.wave * 14);
       this.cooldown = Math.max(this.cooldown, SATELLITE_HIT_LOCKOUT);
+      this.satelliteInvulnerability = SATELLITE_INVULNERABILITY;
       events.hit = true;
       events.satelliteHit = true;
     }
