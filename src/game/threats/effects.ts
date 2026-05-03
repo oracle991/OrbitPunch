@@ -1,6 +1,7 @@
 import { distance, normalize } from "../math";
 import type { HitSpark, Meteor, SimulationEvents, Vec2 } from "../types";
 import { EXPLOSION_RADIUS, MINI_BOSS_HIT_COOLDOWN, PUNCH_KNOCK_SPEED } from "./config";
+import { defeatBonusForThreat, scoreForThreat } from "./waveConfig";
 
 export type ThreatEffectState = {
   wave: number;
@@ -55,7 +56,11 @@ export const damageThreatByImpact = (
   if (meteor.hp <= 0) {
     meteor.alive = false;
     state.defeated += 1;
-    state.score += 100 + state.wave * 15 + 580;
+    state.score += scoreForThreat(
+      meteor.kind,
+      state.wave,
+      scoreBonus + defeatBonusForThreat(meteor.kind, state.wave)
+    );
     state.sparks.push({ pos: { ...meteor.pos }, life: 0.3, maxLife: 0.3 });
   }
 };
@@ -81,7 +86,7 @@ export const explodeCore = (
 
   core.alive = false;
   state.defeated += 1;
-  state.score += 210 + state.wave * 22;
+  state.score += scoreForThreat(core.kind, state.wave);
   state.sparks.push({ pos: { ...core.pos }, life: 0.36, maxLife: 0.36 });
 
   for (const target of meteors) {

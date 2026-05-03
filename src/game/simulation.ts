@@ -3,6 +3,7 @@ import { damageThreatByImpact, explodeCore, planetDamage } from "./threats/effec
 import { CHAIN_KNOCK_SPEED, MINI_BOSS_HIT_COOLDOWN, PUNCH_KNOCK_SPEED } from "./threats/config";
 import { applyTractorPull, updateThreat } from "./threats/update";
 import { spawnThreat } from "./threats/spawn";
+import { defeatBonusForThreat, scoreForThreat } from "./threats/waveConfig";
 import type {
   HitSpark,
   Meteor,
@@ -270,7 +271,7 @@ export class OrbitPunchSimulation {
     const outward = normalize({ x: meteor.pos.x - CENTER.x, y: meteor.pos.y - CENTER.y });
     const hitDirection = direction ?? outward;
     if (meteor.kind === "miniBoss") {
-      this.damageMiniBoss(meteor, 1, 55 + this.wave * 12, MINI_BOSS_HIT_COOLDOWN, 520);
+      this.damageMiniBoss(meteor, 1, 55 + this.wave * 12, MINI_BOSS_HIT_COOLDOWN);
       punch.phase = "returning";
       return;
     }
@@ -416,7 +417,7 @@ export class OrbitPunchSimulation {
       });
       const knockDirection = length(direction) > 0.001 ? direction : fallbackDirection;
       if (meteor.kind === "miniBoss") {
-        this.damageMiniBoss(meteor, 1, 45 + this.wave * 10, MINI_BOSS_HIT_COOLDOWN, 420);
+        this.damageMiniBoss(meteor, 1, 45 + this.wave * 10, MINI_BOSS_HIT_COOLDOWN);
         this.cooldown = Math.max(this.cooldown, SATELLITE_HIT_LOCKOUT);
         events.hit = true;
         events.satelliteHit = true;
@@ -478,7 +479,7 @@ export class OrbitPunchSimulation {
   ): void {
     this.deflectMeteor(meteor, direction, speed, chain);
     this.defeated += 1;
-    this.score += 100 + this.wave * 15 + scoreBonus;
+    this.score += scoreForThreat(meteor.kind, this.wave, scoreBonus);
     this.wave = 1 + Math.floor(this.defeated / 8);
   }
 
@@ -506,7 +507,11 @@ export class OrbitPunchSimulation {
   private defeatMiniBoss(meteor: Meteor, scoreBonus = 0): void {
     meteor.alive = false;
     this.defeated += 1;
-    this.score += 100 + this.wave * 15 + scoreBonus;
+    this.score += scoreForThreat(
+      meteor.kind,
+      this.wave,
+      scoreBonus + defeatBonusForThreat(meteor.kind, this.wave)
+    );
     this.wave = 1 + Math.floor(this.defeated / 8);
     this.sparks.push({ pos: { ...meteor.pos }, life: 0.3, maxLife: 0.3 });
   }

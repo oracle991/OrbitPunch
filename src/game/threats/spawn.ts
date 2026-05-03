@@ -1,8 +1,7 @@
 import { normalize, radialPoint } from "../math";
 import type { Meteor, ThreatKind } from "../types";
 import { CENTER, OUTER_RADIUS } from "../world";
-import { METEOR_BASE_SPEED, ORBITAL_SATELLITE_RADIUS } from "./config";
-import { pickWeightedThreatKind } from "./waveConfig";
+import { pickWeightedThreatKind, rollThreatSpawnConfig } from "./waveConfig";
 
 export type ThreatSpawnState = {
   wave: number;
@@ -38,56 +37,50 @@ export const spawnThreat = (state: ThreatSpawnState): ThreatSpawnResult => {
 };
 
 const spawnMeteor = (state: ThreatSpawnState): Meteor => {
-  const angle = Math.random() * Math.PI * 2;
-  const spawn = radialPoint(angle, OUTER_RADIUS);
-  const inward = randomInboundDirection(spawn, 168);
-  const speed = METEOR_BASE_SPEED + state.wave * 10 + Math.random() * 16;
-  return createThreat(state.nextId(), "meteor", spawn, inward, speed, 25 + Math.random() * 7);
+  const params = rollThreatSpawnConfig("meteor", state.wave);
+  const spawn = radialPoint(params.spawnAngle, OUTER_RADIUS + params.spawnRadiusOffset);
+  const inward = randomInboundDirection(spawn, params.aimRadius);
+  return createThreat(state.nextId(), "meteor", spawn, inward, params.speed, params.radius);
 };
 
 const spawnExplosiveCore = (state: ThreatSpawnState): Meteor => {
-  const angle = Math.random() * Math.PI * 2;
-  const spawn = radialPoint(angle, OUTER_RADIUS);
-  const inward = randomInboundDirection(spawn, 132);
-  const speed = METEOR_BASE_SPEED + state.wave * 8 + Math.random() * 12;
-  return createThreat(state.nextId(), "explosiveCore", spawn, inward, speed, 22);
+  const params = rollThreatSpawnConfig("explosiveCore", state.wave);
+  const spawn = radialPoint(params.spawnAngle, OUTER_RADIUS + params.spawnRadiusOffset);
+  const inward = randomInboundDirection(spawn, params.aimRadius);
+  return createThreat(state.nextId(), "explosiveCore", spawn, inward, params.speed, params.radius);
 };
 
 const spawnTractorDrone = (state: ThreatSpawnState): Meteor => {
-  const angle = Math.random() * Math.PI * 2;
-  const spawn = radialPoint(angle, OUTER_RADIUS);
-  const inward = randomInboundDirection(spawn, 188);
-  const speed = METEOR_BASE_SPEED * 0.74 + state.wave * 7 + Math.random() * 10;
-  return createThreat(state.nextId(), "tractorDrone", spawn, inward, speed, 23);
+  const params = rollThreatSpawnConfig("tractorDrone", state.wave);
+  const spawn = radialPoint(params.spawnAngle, OUTER_RADIUS + params.spawnRadiusOffset);
+  const inward = randomInboundDirection(spawn, params.aimRadius);
+  return createThreat(state.nextId(), "tractorDrone", spawn, inward, params.speed, params.radius);
 };
 
 const spawnOrbitalSatellite = (state: ThreatSpawnState): Meteor => {
-  const angle = Math.random() * Math.PI * 2;
-  const spawn = radialPoint(angle, OUTER_RADIUS);
-  const inward = randomInboundDirection(spawn, 96);
-  const speed = METEOR_BASE_SPEED + state.wave * 8 + Math.random() * 14;
-  const orbitRadius = ORBITAL_SATELLITE_RADIUS + Math.random() * 34;
+  const params = rollThreatSpawnConfig("orbitalSatellite", state.wave);
+  const spawn = radialPoint(params.spawnAngle, OUTER_RADIUS + params.spawnRadiusOffset);
+  const inward = randomInboundDirection(spawn, params.aimRadius);
   return {
-    ...createThreat(state.nextId(), "orbitalSatellite", spawn, inward, speed, 20),
-    orbitAngle: angle,
-    orbitRadius,
-    orbitSpeed: 0.66 + state.wave * 0.035,
+    ...createThreat(state.nextId(), "orbitalSatellite", spawn, inward, params.speed, params.radius),
+    orbitAngle: params.spawnAngle,
+    orbitRadius: params.orbitRadius,
+    orbitSpeed: params.orbitSpeed,
     orbitPhase: 0,
     orbitMajorRadius: OUTER_RADIUS,
-    orbitMinorRadius: orbitRadius,
+    orbitMinorRadius: params.orbitRadius,
     orbitDirection: Math.random() < 0.5 ? -1 : 1
   };
 };
 
 const spawnMiniBoss = (state: ThreatSpawnState): Meteor => {
-  const angle = Math.random() * Math.PI * 2;
-  const spawn = radialPoint(angle, OUTER_RADIUS + 24);
-  const inward = randomInboundDirection(spawn, 72);
-  const speed = METEOR_BASE_SPEED * 0.58 + state.wave * 4;
+  const params = rollThreatSpawnConfig("miniBoss", state.wave);
+  const spawn = radialPoint(params.spawnAngle, OUTER_RADIUS + params.spawnRadiusOffset);
+  const inward = randomInboundDirection(spawn, params.aimRadius);
   return {
-    ...createThreat(state.nextId(), "miniBoss", spawn, inward, speed, 42),
-    hp: 4,
-    maxHp: 4,
+    ...createThreat(state.nextId(), "miniBoss", spawn, inward, params.speed, params.radius),
+    hp: params.hp,
+    maxHp: params.hp,
     hitCooldown: 0
   };
 };
