@@ -180,6 +180,7 @@ export class OrbitPunchSimulation {
   }
 
   public update(dt: number): SimulationEvents {
+    const startedWave = this.wave;
     const events: SimulationEvents = {
       hit: false,
       satelliteHit: false,
@@ -253,6 +254,13 @@ export class OrbitPunchSimulation {
       this.planetHp = 0;
       this.gameOver = true;
       events.gameOver = true;
+    }
+
+    if (!events.gameOver && this.wave > startedWave) {
+      events.waveAdvanced = {
+        from: startedWave,
+        to: this.wave
+      };
     }
 
     return events;

@@ -91,6 +91,8 @@ export class GameScene extends Phaser.Scene {
         `Score ${snapshot.score.toLocaleString()} / Wave ${snapshot.wave}`,
         "Retry"
       );
+    } else if (events.waveAdvanced) {
+      this.showUpgradeOverlay(events.waveAdvanced.to);
     }
 
     this.render(this.sim.snapshot(), dt);
@@ -133,6 +135,7 @@ export class GameScene extends Phaser.Scene {
   private showOverlay(title: string, summary: string, button: string): void {
     const panel = this.hud.overlay.querySelector(".panel");
     if (panel) {
+      panel.classList.remove("upgrade-panel");
       panel.innerHTML = `
         <p class="kicker">Orbit Punch Prototype</p>
         <h1>${title}</h1>
@@ -148,6 +151,46 @@ export class GameScene extends Phaser.Scene {
         }
         this.startGame();
       });
+    }
+    this.hud.overlay.classList.remove("hidden");
+  }
+
+  private showUpgradeOverlay(wave: number): void {
+    this.cancelFire();
+    this.scene.pause();
+
+    const panel = this.hud.overlay.querySelector(".panel");
+    if (panel) {
+      panel.classList.add("upgrade-panel");
+      panel.innerHTML = `
+        <p class="kicker">Satellite Upgrade</p>
+        <h1>Wave ${wave}</h1>
+        <p class="summary">Choose one upgrade to continue.</p>
+        <div class="upgrade-grid" role="list" aria-label="Upgrade choices">
+          <button class="upgrade-choice" type="button" data-upgrade-choice="1" role="listitem">
+            <span class="upgrade-art" aria-hidden="true"></span>
+            <span class="upgrade-name">Upgrade 1</span>
+            <span class="upgrade-description">Upgrade details will appear here.</span>
+          </button>
+          <button class="upgrade-choice" type="button" data-upgrade-choice="2" role="listitem">
+            <span class="upgrade-art" aria-hidden="true"></span>
+            <span class="upgrade-name">Upgrade 2</span>
+            <span class="upgrade-description">Upgrade details will appear here.</span>
+          </button>
+          <button class="upgrade-choice" type="button" data-upgrade-choice="3" role="listitem">
+            <span class="upgrade-art" aria-hidden="true"></span>
+            <span class="upgrade-name">Upgrade 3</span>
+            <span class="upgrade-description">Upgrade details will appear here.</span>
+          </button>
+        </div>
+      `;
+
+      for (const button of panel.querySelectorAll<HTMLButtonElement>(".upgrade-choice")) {
+        button.addEventListener("click", () => {
+          this.hud.overlay.classList.add("hidden");
+          this.scene.resume();
+        });
+      }
     }
     this.hud.overlay.classList.remove("hidden");
   }

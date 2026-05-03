@@ -99,5 +99,9 @@ export type SimulationEvents = {
   satelliteHit: boolean;
   planetHit: boolean;
   gameOver: boolean;
+  waveAdvanced?: {
+    from: number;
+    to: number;
+  };
   chainHits: ChainHit[];
 };
