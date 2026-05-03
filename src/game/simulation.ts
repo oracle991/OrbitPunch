@@ -710,7 +710,7 @@ export class OrbitPunchSimulation {
 
         const explosive = this.pickExplosiveCore(first, second);
         if (explosive) {
-          this.applyExplosion(explosive, events, Math.max(2, first.chain, second.chain));
+          this.applyExplosion(explosive, events, Math.max(1, first.chain, second.chain));
           events.hit = true;
           continue;
         }
