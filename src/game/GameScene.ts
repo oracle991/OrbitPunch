@@ -286,6 +286,9 @@ export class GameScene extends Phaser.Scene {
 
   private showTutorialOverlay(): void {
     const snapshot = this.sim.snapshot();
+    if (snapshot.gameOver) {
+      return;
+    }
     const shouldPauseGame = !snapshot.gameOver && !this.scene.isPaused();
     this.cancelFire();
     if (shouldPauseGame) {
