@@ -252,6 +252,7 @@ export class OrbitPunchSimulation {
       knockSpeedMultiplier:
         speedMultiplier * this.currentKnockSpeedMultiplier() * (options.knockSpeedMultiplier ?? 1),
       charged,
+      hasHit: false,
       phase: "extending"
     });
   }
@@ -596,16 +597,21 @@ export class OrbitPunchSimulation {
 
   private resolveHits(events: SimulationEvents): void {
     for (const punch of this.punches) {
+      if (punch.hasHit) {
+        continue;
+      }
+
       for (const meteor of this.meteors) {
         if (!meteor.alive || meteor.knocked) {
           continue;
         }
 
         if (distance(punch.pos, meteor.pos) <= punch.radius + meteor.radius) {
-          this.hitThreat(meteor, punch);
+          const hitApplied = this.hitThreat(meteor, punch);
+          punch.hasHit = true;
           punch.phase = "returning";
-          events.hit = true;
-          continue;
+          events.hit = events.hit || hitApplied;
+          break;
         }
 
         let chainContact: Vec2 | undefined;
@@ -639,30 +645,32 @@ export class OrbitPunchSimulation {
           x: meteor.pos.x - CENTER.x,
           y: meteor.pos.y - CENTER.y
         });
-        this.hitThreat(
+        const hitApplied = this.hitThreat(
           meteor,
           punch,
           length(contactDirection) > 0.001 ? contactDirection : fallbackDirection
         );
+        punch.hasHit = true;
         punch.phase = "returning";
-        events.hit = true;
+        events.hit = events.hit || hitApplied;
+        break;
       }
     }
   }
 
-  private hitThreat(meteor: Meteor, punch: Punch, direction?: Vec2): void {
+  private hitThreat(meteor: Meteor, punch: Punch, direction?: Vec2): boolean {
     const outward = normalize({ x: meteor.pos.x - CENTER.x, y: meteor.pos.y - CENTER.y });
     const hitDirection = direction ?? outward;
     const perfectTiming = this.perfectTimingBonus(punch);
     if (meteor.kind === "miniBoss") {
-      this.damageMiniBoss(
+      const damaged = this.damageMiniBoss(
         meteor,
         punch.damageMultiplier + perfectTiming.miniBossDamageBonus,
         55 + this.wave * 12 + perfectTiming.scoreBonus,
         MINI_BOSS_HIT_COOLDOWN
       );
       punch.phase = "returning";
-      return;
+      return damaged;
     }
 
     this.knockMeteor(
@@ -673,6 +681,7 @@ export class OrbitPunchSimulation {
         perfectTiming.knockSpeedMultiplier,
       perfectTiming.scoreBonus
     );
+    return true;
   }
 
   private resolveMeteorImpacts(events: SimulationEvents): void {
@@ -938,9 +947,9 @@ export class OrbitPunchSimulation {
     score: number,
     cooldown: number,
     defeatScoreBonus = 0
-  ): void {
+  ): boolean {
     if ((meteor.hitCooldown ?? 0) > 0) {
-      return;
+      return false;
     }
 
     meteor.hp -= damage;
@@ -951,6 +960,8 @@ export class OrbitPunchSimulation {
     if (meteor.hp <= 0) {
       this.defeatMiniBoss(meteor, defeatScoreBonus);
     }
+
+    return true;
   }
 
   private defeatMiniBoss(meteor: Meteor, scoreBonus = 0): void {

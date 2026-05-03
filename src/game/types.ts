@@ -58,6 +58,7 @@ export type Punch = {
   damageMultiplier: number;
   knockSpeedMultiplier: number;
   charged: boolean;
+  hasHit: boolean;
   phase: "extending" | "holding" | "returning";
 };
 
