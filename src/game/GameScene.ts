@@ -59,6 +59,7 @@ const PLAYER_DISPLAY_SIZE = 72;
 const PUNCH_VISIBLE_WIDTH_RATIO = 99 / 128;
 const CHAIN_LINK_HEIGHT = 18;
 const CHAIN_LINK_PADDING = 18;
+const STAR_COUNT = 96;
 const THREAT_VISIBLE_WIDTH_RATIOS: Record<ThreatKind, number> = {
   meteor: 70 / 96,
   orbitalSatellite: 84 / 96,
@@ -77,9 +78,17 @@ type HudElements = {
   startButton: HTMLButtonElement;
 };
 
+type BackgroundStar = {
+  x: number;
+  y: number;
+  radius: number;
+  alpha: number;
+};
+
 export class GameScene extends Phaser.Scene {
   private readonly sim = new OrbitPunchSimulation();
   private readonly hud: HudElements;
+  private readonly stars = this.createStarfield();
   private graphics!: Phaser.GameObjects.Graphics;
   private overlayGraphics!: Phaser.GameObjects.Graphics;
   private planetImage!: Phaser.GameObjects.Image;
@@ -95,6 +104,15 @@ export class GameScene extends Phaser.Scene {
   public constructor(hud: HudElements) {
     super("game");
     this.hud = hud;
+  }
+
+  private createStarfield(): BackgroundStar[] {
+    return Array.from({ length: STAR_COUNT }, () => ({
+      x: Math.random() * world.width,
+      y: Math.random() * world.height,
+      radius: Phaser.Math.FloatBetween(0.55, 1.9),
+      alpha: Phaser.Math.FloatBetween(0.16, 0.4)
+    }));
   }
 
   public preload(): void {
@@ -498,12 +516,9 @@ export class GameScene extends Phaser.Scene {
     this.graphics.fillStyle(0x07121a, 0.82);
     this.graphics.fillRect(0, 0, world.width, world.height);
 
-    for (let i = 0; i < 80; i += 1) {
-      const x = (i * 181) % world.width;
-      const y = (i * 97) % world.height;
-      const radius = 0.7 + ((i * 13) % 20) / 18;
-      this.graphics.fillStyle(palette.star, 0.18 + ((i * 7) % 20) / 100);
-      this.graphics.fillCircle(x, y, radius);
+    for (const star of this.stars) {
+      this.graphics.fillStyle(palette.star, star.alpha);
+      this.graphics.fillCircle(star.x, star.y, star.radius);
     }
   }
 

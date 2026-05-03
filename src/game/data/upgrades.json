@@ -79,12 +79,12 @@
       "kind": "multi",
       "maxLevel": 2,
       "descriptions": [
-        "ノックバック中の脅威のチェーン接触判定を8広げる。",
-        "ノックバック中の脅威のチェーン接触判定を15広げる。"
+        "ノックバック中の脅威のチェーン接触判定を30広げる。",
+        "ノックバック中の脅威のチェーン接触判定を45広げる。"
       ],
       "effects": [
-        { "chainCollisionBonus": 8 },
-        { "chainCollisionBonus": 15 }
+        { "chainCollisionBonus": 30 },
+        { "chainCollisionBonus": 45 }
       ]
     },
     {
@@ -109,12 +109,12 @@
       "kind": "multi",
       "maxLevel": 2,
       "descriptions": [
-        "爆発コアの爆風半径を34、爆風速度を45上げる。",
-        "爆発コアの爆風半径を62、爆風速度を80上げる。"
+        "爆発コアの爆風半径を62、爆風速度を45上げる。",
+        "爆発コアの爆風半径を90、爆風速度を80上げる。"
       ],
       "effects": [
-        { "explosionRadiusBonus": 34, "explosionSpeedBonus": 45 },
-        { "explosionRadiusBonus": 62, "explosionSpeedBonus": 80 }
+        { "explosionRadiusBonus": 62, "explosionSpeedBonus": 45 },
+        { "explosionRadiusBonus": 90, "explosionSpeedBonus": 80 }
       ]
     },
     {
@@ -123,12 +123,12 @@
       "kind": "multi",
       "maxLevel": 2,
       "descriptions": [
-        "パンチ先端の判定半径を5広げる。",
-        "パンチ先端の判定半径を9広げる。"
+        "パンチ先端の判定半径を9広げる。",
+        "パンチ先端の判定半径を14広げる。"
       ],
       "effects": [
-        { "punchRadiusBonus": 5 },
-        { "punchRadiusBonus": 9 }
+        { "punchRadiusBonus": 9 },
+        { "punchRadiusBonus": 14 }
       ]
     },
     {
@@ -155,7 +155,7 @@
         "一定間隔で自機接触時のロックアウトと無敵時間を軽減する。"
       ],
       "effect": {
-        "shieldCooldown": 8,
+        "shieldCooldown": 4,
         "lockoutWhenAbsorbed": 0.42,
         "invulnerabilityWhenAbsorbed": 0.65
       }
@@ -208,10 +208,10 @@
       "kind": "single",
       "maxLevel": 1,
       "descriptions": [
-        "5チェーン以上の達成後、短時間だけパンチ性能を強化する。"
+        "3チェーン以上の達成後、短時間だけパンチ性能を強化する。"
       ],
       "effect": {
-        "chainThreshold": 5,
+        "chainThreshold": 3,
         "duration": 5,
         "punchSpeedMultiplier": 1.25,
         "knockSpeedMultiplier": 1.18,
@@ -225,10 +225,10 @@
       "kind": "single",
       "maxLevel": 1,
       "descriptions": [
-        "6チェーン以上の達成時、周囲へ衝撃波を発生させる。"
+        "4チェーン以上の達成時、周囲へ衝撃波を発生させる。"
       ],
       "effect": {
-        "chainThreshold": 6,
+        "chainThreshold": 4,
         "radius": 118,
         "knockSpeed": 330,
         "scoreBonus": 180,
