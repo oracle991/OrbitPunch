@@ -121,6 +121,33 @@ export const explodeCore = (
       Math.max(0, explosionRadius - blastDistance) * 0.7;
     let nextChain = chain + 1;
     let shieldRecovery = 0;
+    if (target.kind === "explosiveCore") {
+      if (target.knocked) {
+        nextChain = Math.max(nextChain, target.chain);
+      } else {
+        const allocation = allocateChain();
+        nextChain = allocation.chainCount;
+        shieldRecovery = recoverShield(nextChain);
+      }
+      events.chainHits.push({
+        pos: { ...target.pos },
+        count: nextChain,
+        shieldRecovery
+      });
+      explodeCore(
+        target,
+        meteors,
+        events,
+        nextChain,
+        state,
+        damageByImpact,
+        recoverShield,
+        allocateChain,
+        options
+      );
+      continue;
+    }
+
     if (target.knocked) {
       target.vel.x += direction.x * blastSpeed * 0.38;
       target.vel.y += direction.y * blastSpeed * 0.38;

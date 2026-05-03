@@ -637,7 +637,7 @@ export class OrbitPunchSimulation {
         }
 
         if (distance(punch.pos, meteor.pos) <= punch.radius + meteor.radius) {
-          const hitApplied = this.hitThreat(meteor, punch);
+          const hitApplied = this.hitThreat(meteor, punch, events);
           punch.hasHit = true;
           punch.phase = "returning";
           events.hit = events.hit || hitApplied;
@@ -678,6 +678,7 @@ export class OrbitPunchSimulation {
         const hitApplied = this.hitThreat(
           meteor,
           punch,
+          events,
           length(contactDirection) > 0.001 ? contactDirection : fallbackDirection
         );
         punch.hasHit = true;
@@ -688,7 +689,12 @@ export class OrbitPunchSimulation {
     }
   }
 
-  private hitThreat(meteor: Meteor, punch: Punch, direction?: Vec2): boolean {
+  private hitThreat(
+    meteor: Meteor,
+    punch: Punch,
+    events: SimulationEvents,
+    direction?: Vec2
+  ): boolean {
     const outward = normalize({ x: meteor.pos.x - CENTER.x, y: meteor.pos.y - CENTER.y });
     const hitDirection = direction ?? outward;
     const perfectTiming = this.perfectTimingBonus(punch);
@@ -701,6 +707,11 @@ export class OrbitPunchSimulation {
       );
       punch.phase = "returning";
       return damaged;
+    }
+
+    if (meteor.kind === "explosiveCore") {
+      this.applyExplosion(meteor, events, 1);
+      return true;
     }
 
     this.knockMeteor(
